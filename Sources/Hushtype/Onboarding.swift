@@ -127,7 +127,9 @@ struct OnboardingView: View {
         .padding(.horizontal, 18)
         .frame(width: 220)
         .frame(maxHeight: .infinity)
-        .background(Color.primary.opacity(0.03))
+        // A full-height sidebar like System Settings: the material runs under the transparent
+        // title bar, and its edge against the content does the dividing, so no line is needed.
+        .background(SidebarMaterial().ignoresSafeArea())
     }
 
     private func sidebarRow(_ item: OnboardingStep) -> some View {
@@ -442,4 +444,17 @@ struct OnboardingView: View {
             }
         }
     }
+}
+
+/// The translucent sidebar material macOS uses in System Settings and Finder.
+private struct SidebarMaterial: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
