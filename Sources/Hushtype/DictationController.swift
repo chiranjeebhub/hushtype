@@ -95,6 +95,7 @@ final class DictationController: ObservableObject {
             settings.makeCleaner()?.prewarm()
             phase = .recording
             overlay.show()
+            if settings.soundsEnabled { Chime.playStart() }
         } catch {
             session.cancel()
             show(error: error.localizedDescription)
@@ -113,6 +114,7 @@ final class DictationController: ObservableObject {
         guard phase == .recording else { return }
         let releasedAt = Date()
         let seconds = recorder.stop()
+        if settings.soundsEnabled { Chime.playStop() }
         guard let session = transcription else { return reset() }
         transcription = nil
         guard seconds >= Self.minimumRecordingSeconds else {

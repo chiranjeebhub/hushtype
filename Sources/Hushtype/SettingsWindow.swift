@@ -101,6 +101,7 @@ private struct GeneralPane: View {
                     ForEach(languages) { Text($0.name).tag($0.id) }
                 }
                 .onChange(of: settings.language) { controller.prepareSpeechModel() }
+                Toggle("Play a sound when listening starts and stops", isOn: $settings.soundsEnabled)
             } header: {
                 Text("Dictation")
             } footer: {
