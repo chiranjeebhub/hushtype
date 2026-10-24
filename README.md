@@ -1,6 +1,12 @@
-<p align="center"><img src="assets/hushtype-icon-512.png" width="128" alt="Hushtype"></p>
+<p align="center"><a href="https://hushtype.chiranjeeb.dev"><img src="assets/social-preview.png" alt="Hushtype: Speak naturally. Type perfectly."></a></p>
 
 # Hushtype
+
+<p>
+  <a href="https://hushtype.chiranjeeb.dev"><b>Website</b></a> ·
+  <a href="https://github.com/chiranjeebhub/hushtype/releases/latest"><b>Download</b></a> ·
+  <code>brew install --cask chiranjeebhub/tap/hushtype</code>
+</p>
 
 Hold a key, speak, let go, and polished text appears in whatever app has focus. An open,
 privacy-first alternative to Wispr Flow, built as a native macOS app in Swift and SwiftUI.
@@ -59,6 +65,8 @@ Tests/                  HushtypeCore tests (swift test)
 Resources/Info.plist    app bundle metadata (LSUIElement, mic usage string)
 scripts/build-app.sh    builds, icons and signs dist/Hushtype.app
 scripts/release.sh      signed, notarized release with DMG and Sparkle appcast (RELEASING.md)
+docs/                   website, served by GitHub Pages at hushtype.chiranjeeb.dev
+assets/social-preview.* social preview image (node scripts/render-social-preview.mjs regenerates the PNG)
 ```
 
 ## License
