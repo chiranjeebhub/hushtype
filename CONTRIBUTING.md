@@ -51,8 +51,7 @@ needs a green build before it is merged. Releases are cut by the maintainer (see
 
 Hushtype reads audio and text near the cursor, so changes that send data off the Mac get extra scrutiny. Today
 Hushtype itself only talks to Anthropic (cleanup) and the Sparkle update feed, plus iCloud key-value sync when
-enabled. Call out any new network call clearly in
-your PR.
+enabled. Call out any new network call clearly in your PR.
 
 ## License
 
