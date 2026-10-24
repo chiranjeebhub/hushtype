@@ -108,6 +108,7 @@ final class SettingsWindowController {
     private var window: NSWindow?
     private var titleSubscription: AnyCancellable?
     private var windowObservers: [NSObjectProtocol] = []
+    private var windowButtons: NSHostingView<WindowButtons>?
 
     init(settings: SettingsStore, controller: DictationController, updater: Updater, runSetup: @escaping () -> Void) {
         self.settings = settings
@@ -137,7 +138,8 @@ final class SettingsWindowController {
             self.window = window
             // AppKit puts the buttons back after resizing and full screen, so place them again.
             for name in [NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
-                         NSWindow.didExitFullScreenNotification, NSWindow.didBecomeKeyNotification] {
+                         NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification,
+                         NSWindow.didBecomeKeyNotification] {
                 windowObservers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated { self?.placeWindowButtons() }
                 })
@@ -154,25 +156,74 @@ final class SettingsWindowController {
 }
 
 extension SettingsWindowController {
-    /// Where the close, minimise and zoom buttons sit: inside the sidebar's top-left corner, as in
-    /// the design, rather than hard against the window edge.
-    static let windowButtonInset = CGPoint(x: 21, y: 20)
+    /// The title bar's height, tall enough for the window buttons to sit inside the sidebar's
+    /// top-left corner, as in the design, rather than hard against the window edge.
+    static let titlebarHeight: CGFloat = 56
 
     fileprivate func placeWindowButtons() {
-        guard let window, !window.styleMask.contains(.fullScreen),
-              let close = window.standardWindowButton(.closeButton),
+        guard let window, let close = window.standardWindowButton(.closeButton),
               let titlebar = close.superview, let container = titlebar.superview else { return }
-        let size = close.frame.size
-        // A taller title bar, so the buttons can sit lower without being clipped.
-        let height = Self.windowButtonInset.y * 2 + size.height
-        container.frame = NSRect(x: 0, y: window.frame.height - height, width: window.frame.width, height: height)
+        let native: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        let fullScreen = window.styleMask.contains(.fullScreen)
+        // In full screen AppKit shows its own buttons in the menu-bar reveal, so keep those there.
+        for type in native { window.standardWindowButton(type)?.isHidden = !fullScreen }
+        windowButtons?.isHidden = fullScreen
+        guard !fullScreen else { return }
+        container.frame = NSRect(x: 0, y: window.frame.height - Self.titlebarHeight,
+                                 width: window.frame.width, height: Self.titlebarHeight)
         titlebar.frame = container.bounds
-        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-        for (index, type) in buttons.enumerated() {
-            window.standardWindowButton(type)?.setFrameOrigin(
-                NSPoint(x: Self.windowButtonInset.x + CGFloat(index) * (size.width + 6),
-                        y: Self.windowButtonInset.y))
+        let buttons = windowButtons ?? {
+            let view = NSHostingView(rootView: WindowButtons(window: window))
+            windowButtons = view
+            return view
+        }()
+        if buttons.superview !== titlebar { titlebar.addSubview(buttons) }
+        let size = buttons.fittingSize
+        // The first button's centre sits 28 points in from the window's top-left corner.
+        buttons.frame = NSRect(x: 28 - size.height / 2, y: Self.titlebarHeight - 28 - size.height / 2,
+                               width: size.width, height: size.height)
+    }
+}
+
+/// The design's window buttons: small flat dots that show their symbols when the pointer is over
+/// them, in place of the larger system ones.
+private struct WindowButtons: View {
+    weak var window: NSWindow?
+    @Environment(\.controlActiveState) private var activeState
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            dot(Color(red: 0.929, green: 0.416, blue: 0.369), symbol: "xmark", label: "Close") {
+                window?.performClose(nil)
+            }
+            dot(Color(red: 0.957, green: 0.749, blue: 0.310), symbol: "minus", label: "Minimize") {
+                window?.performMiniaturize(nil)
+            }
+            dot(Color(red: 0.380, green: 0.773, blue: 0.329), symbol: "plus", label: "Full Screen") {
+                window?.toggleFullScreen(nil)
+            }
         }
+        .padding(6)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+    }
+
+    private func dot(_ color: Color, symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Circle()
+                .fill(activeState == .inactive && !hovering ? Color.primary.opacity(0.18) : color)
+                .overlay(Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
+                .overlay(
+                    Image(systemName: symbol)
+                        .font(.system(size: 7, weight: .heavy))
+                        .foregroundStyle(Color.black.opacity(0.55))
+                        .opacity(hovering ? 1 : 0)
+                )
+                .frame(width: 12, height: 12)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
