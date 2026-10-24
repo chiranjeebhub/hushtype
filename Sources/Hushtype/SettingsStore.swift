@@ -31,6 +31,8 @@ final class SettingsStore: ObservableObject {
     @Published var alwaysReadyMic: Bool { didSet { defaults.set(alwaysReadyMic, forKey: "alwaysReadyMic") } }
     /// Send the app name and the text around the cursor to Claude, so it matches tone and spelling.
     @Published var useContext: Bool { didSet { defaults.set(useContext, forKey: "useContext") } }
+    /// Add a word to the dictionary when the user respells it after Hushtype typed it.
+    @Published var learnFromCorrections: Bool { didSet { defaults.set(learnFromCorrections, forKey: "learnFromCorrections") } }
     @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
     /// Where setup resumes after Hushtype relaunches itself mid-onboarding.
     @Published var onboardingStep: Int { didSet { defaults.set(onboardingStep, forKey: "onboardingStep") } }
@@ -43,11 +45,23 @@ final class SettingsStore: ObservableObject {
         soundsEnabled = defaults.object(forKey: "soundsEnabled") as? Bool ?? true
         alwaysReadyMic = defaults.bool(forKey: "alwaysReadyMic")
         useContext = defaults.object(forKey: "useContext") as? Bool ?? true
+        learnFromCorrections = defaults.object(forKey: "learnFromCorrections") as? Bool ?? true
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         onboardingStep = defaults.integer(forKey: "onboardingStep")
     }
 
     var vocabulary: [String] { DictationPipeline.vocabulary(from: dictionaryText) }
+
+    /// Appends terms that aren't in the dictionary yet, one per line.
+    func addToDictionary(_ terms: [String]) {
+        var known = Set(vocabulary.map { $0.lowercased() })
+        var text = dictionaryText
+        for term in terms where known.insert(term.lowercased()).inserted {
+            if !text.isEmpty && !text.hasSuffix("\n") { text += "\n" }
+            text += term
+        }
+        dictionaryText = text
+    }
 
     var transcriptionOptions: TranscriptionOptions {
         TranscriptionOptions(language: language == "auto" ? nil : language, vocabulary: vocabulary)

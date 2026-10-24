@@ -160,3 +160,37 @@ final class APIKeyValidatorTests: XCTestCase {
         XCTAssertEqual(APIKeyValidator.classify(status: 503), .unreachable("HTTP 503"))
     }
 }
+
+final class CorrectionLearnerTests: XCTestCase {
+    func testFindsRespelledWordInsideSurroundingText() {
+        let found = CorrectionLearner.corrections(inserted: " We deploy on cubernetes today.",
+                                                  edited: "Notes: We deploy on Kubernetes today. Thanks")
+        XCTAssertEqual(found.map(\.to), ["Kubernetes"])
+        XCTAssertEqual(found.first?.from, "cubernetes")
+        XCTAssertEqual(found.first?.caseOnly, false)
+    }
+
+    func testCapitalizedNameAtTheEnd() {
+        let found = CorrectionLearner.corrections(inserted: "Thanks jen", edited: "Thanks Jen, see you")
+        XCTAssertEqual(found.map(\.to), ["Jen"])
+        XCTAssertEqual(found.first?.caseOnly, true)
+        XCTAssertEqual(found.first?.atSentenceStart, false)
+    }
+
+    func testFirstWordRespelled() {
+        let found = CorrectionLearner.corrections(inserted: "Shiranjib will review it.",
+                                                  edited: "Hi team. Chiranjeeb will review it.")
+        XCTAssertEqual(found.map(\.to), ["Chiranjeeb"])
+    }
+
+    func testRewritesAreIgnored() {
+        XCTAssertTrue(CorrectionLearner.corrections(inserted: "send the report today",
+                                                    edited: "share the deck today").isEmpty)
+        XCTAssertTrue(CorrectionLearner.corrections(inserted: "looks good", edited: "looks good").isEmpty)
+    }
+
+    func testSingleWordWithNothingToAnchor() {
+        let found = CorrectionLearner.corrections(inserted: "hushtipe", edited: "try Hushtype now")
+        XCTAssertEqual(found.map(\.to), ["Hushtype"])
+    }
+}

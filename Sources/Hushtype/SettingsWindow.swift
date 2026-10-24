@@ -231,6 +231,12 @@ private struct DictionaryPane: View {
             } footer: {
                 Footnote("One name, product or term per line. \(settings.vocabulary.count) terms. Used when transcribing and polishing.")
             }
+
+            Section {
+                Toggle("Learn from my corrections", isOn: $settings.learnFromCorrections)
+            } footer: {
+                Footnote("When you fix the spelling of a name or term right after dictating it, Hushtype adds your spelling here. This happens on your Mac; nothing extra is sent.")
+            }
         }
         .formStyle(.grouped)
     }
