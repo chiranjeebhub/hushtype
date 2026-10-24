@@ -12,6 +12,11 @@
 #   HUSHTYPE_VERSION            marketing version, e.g. 0.2.0
 #   HUSHTYPE_BUILD              build number, e.g. 12
 #   HUSHTYPE_SPARKLE_PUBLIC_KEY Sparkle EdDSA public key; turns on auto-updates
+#
+# iCloud sync needs a provisioning profile for app.hushtype.Hushtype with iCloud (key-value
+# storage) enabled, matching the signing identity (Development or Developer ID):
+#   HUSHTYPE_PROVISIONING_PROFILE path to the .provisionprofile; embeds it and adds the iCloud
+#                                 entitlements. Without it the app builds and runs, but doesn't sync.
 # A "Developer ID Application" identity turns on the hardened runtime and secure timestamps,
 # which notarization requires.
 set -euo pipefail
@@ -59,6 +64,23 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
+ENTITLEMENTS="Resources/Hushtype.entitlements"
+if [ -n "${HUSHTYPE_PROVISIONING_PROFILE:-}" ]; then
+  cp "$HUSHTYPE_PROVISIONING_PROFILE" "$APP/Contents/embedded.provisionprofile"
+  TEAM="$(security cms -D -i "$HUSHTYPE_PROVISIONING_PROFILE" | plutil -extract TeamIdentifier.0 raw -)"
+  APP_ID="$TEAM.$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$PLIST")"
+  ENTITLEMENTS="$(mktemp -d)/Hushtype.entitlements"
+  cp Resources/Hushtype.entitlements "$ENTITLEMENTS"
+  /usr/libexec/PlistBuddy \
+    -c "Add :com.apple.application-identifier string $APP_ID" \
+    -c "Add :com.apple.developer.team-identifier string $TEAM" \
+    -c "Add :com.apple.developer.ubiquity-kvstore-identifier string $APP_ID" \
+    -c "Add :keychain-access-groups array" \
+    -c "Add :keychain-access-groups:0 string $APP_ID" \
+    "$ENTITLEMENTS"
+  echo "Embedded provisioning profile for team $TEAM; iCloud sync is on."
+fi
+
 # Sign inside out: Sparkle's helpers, the framework, then the app.
 SIGN=(codesign --force --sign "$IDENTITY")
 if [[ "$IDENTITY" == "Developer ID Application"* ]]; then
@@ -70,6 +92,6 @@ SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
 "${SIGN[@]}" "$SPARKLE/Autoupdate"
 "${SIGN[@]}" "$SPARKLE/Updater.app"
 "${SIGN[@]}" "$APP/Contents/Frameworks/Sparkle.framework"
-"${SIGN[@]}" --entitlements Resources/Hushtype.entitlements "$APP"
+"${SIGN[@]}" --entitlements "$ENTITLEMENTS" "$APP"
 codesign --verify --deep --strict "$APP"
 echo "Built $APP (signed with: $IDENTITY)"

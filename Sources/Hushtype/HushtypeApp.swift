@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let settings = SettingsStore()
     let updater = Updater()
     lazy var controller = DictationController(settings: settings)
+    private lazy var cloudSync = CloudSync(settings: settings, controller: controller)
     private lazy var onboardingWindow = OnboardingWindowController(settings: settings, controller: controller)
     private lazy var settingsWindow = SettingsWindowController(settings: settings, controller: controller,
                                                                 updater: updater) { [weak self] in
@@ -30,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = cloudSync
         controller.start()
         // `open Hushtype.app --args -HushtypeOpenSettings Claude` jumps straight to a Settings tab.
         if let tab = UserDefaults.standard.string(forKey: "HushtypeOpenSettings") {

@@ -41,6 +41,10 @@ final class SettingsStore: ObservableObject {
     @Published var keepHistory: Bool { didSet { defaults.set(keepHistory, forKey: "keepHistory") } }
     /// Double-tap the dictation key to keep listening without holding it.
     @Published var handsFree: Bool { didSet { defaults.set(handsFree, forKey: "handsFree") } }
+    /// Mirror the dictionary, snippets and style settings to iCloud. Kept per Mac.
+    @Published var iCloudSync: Bool { didSet { defaults.set(iCloudSync, forKey: "iCloudSync") } }
+    /// Keep the Anthropic key in iCloud Keychain. Change it with `setKeySyncing(_:)`.
+    @Published private(set) var syncAPIKey: Bool { didSet { defaults.set(syncAPIKey, forKey: "syncAPIKey") } }
     @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
     /// Where setup resumes after Hushtype relaunches itself mid-onboarding.
     @Published var onboardingStep: Int { didSet { defaults.set(onboardingStep, forKey: "onboardingStep") } }
@@ -57,6 +61,8 @@ final class SettingsStore: ObservableObject {
         snippets = (defaults.data(forKey: "snippets")).flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
         keepHistory = defaults.object(forKey: "keepHistory") as? Bool ?? true
         handsFree = defaults.object(forKey: "handsFree") as? Bool ?? true
+        iCloudSync = defaults.bool(forKey: "iCloudSync")
+        syncAPIKey = defaults.bool(forKey: "syncAPIKey")
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         onboardingStep = defaults.integer(forKey: "onboardingStep")
     }
@@ -78,18 +84,35 @@ final class SettingsStore: ObservableObject {
         TranscriptionOptions(language: language == "auto" ? nil : language, vocabulary: vocabulary)
     }
 
+    /// Whether API keys go to iCloud Keychain right now.
+    private var keysSynced: Bool { iCloudSync && syncAPIKey }
+
     func apiKey(_ service: APIService) -> String {
-        Keychain.read(account: service.rawValue) ?? ""
+        Keychain.read(account: service.rawValue, synced: keysSynced) ?? ""
     }
 
     func setAPIKey(_ value: String, for service: APIService) {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            Keychain.delete(account: service.rawValue)
-        } else {
+            Keychain.delete(account: service.rawValue, synced: keysSynced)
+        } else if !Keychain.write(trimmed, account: service.rawValue, synced: keysSynced) {
             Keychain.write(trimmed, account: service.rawValue)
         }
         objectWillChange.send()
+    }
+
+    /// Moves the saved keys into or out of iCloud Keychain. Returns false, leaving everything as it
+    /// was, when iCloud Keychain isn't available to this build.
+    @discardableResult
+    func setKeySyncing(_ on: Bool) -> Bool {
+        let wasSynced = keysSynced
+        for service in APIService.allCases {
+            let key = Keychain.read(account: service.rawValue, synced: wasSynced) ?? ""
+            guard !key.isEmpty else { continue }
+            if !Keychain.write(key, account: service.rawValue, synced: on && iCloudSync) { return false }
+        }
+        syncAPIKey = on
+        return true
     }
 
     /// Command mode always needs Claude, even with polishing turned off.
