@@ -92,7 +92,6 @@ enum Permission: String, CaseIterable, Identifiable {
     private var tccService: String? {
         switch self {
         case .microphone: return nil
-        case .inputMonitoring: return "ListenEvent"
         case .accessibility: return "Accessibility"
         }
     }
