@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// granted instead of reflecting whatever was true when the menu last redrew.
     let permissions = PermissionMonitor()
     private var permissionWatch: AnyCancellable?
+    private var windowObservers: [NSObjectProtocol] = []
     private lazy var cloudSync = CloudSync(settings: settings, controller: controller)
     private lazy var onboardingWindow = OnboardingWindowController(settings: settings, controller: controller)
     private lazy var settingsWindow = SettingsWindowController(settings: settings, controller: controller,
@@ -40,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = cloudSync
+        watchWindowsForDockIcon()
         controller.start()
         permissions.start(every: 2)
         // Once Input Monitoring is granted, try the dictation key again without waiting for Settings.
@@ -55,6 +57,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else if !settings.hasCompletedOnboarding || !Permissions.allGranted {
             showOnboarding()
         }
+    }
+
+    /// Hushtype lives in the menu bar, but while setup or Settings is open it also shows a Dock icon, so
+    /// the window can be found again with the Dock or ⌘Tab.
+    private func watchWindowsForDockIcon() {
+        let center = NotificationCenter.default
+        let names: [Notification.Name] = [NSWindow.didBecomeKeyNotification, NSWindow.willCloseNotification,
+                                          NSWindow.didMiniaturizeNotification]
+        windowObservers = names.map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                // A closing window is still visible during willClose, so look once it has gone.
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.updateDockIcon() } }
+            }
+        }
+    }
+
+    private func updateDockIcon() {
+        let windowOpen = NSApp.windows.contains { window in
+            !(window is NSPanel) && window.styleMask.contains(.titled) && (window.isVisible || window.isMiniaturized)
+        }
+        let policy: NSApplication.ActivationPolicy = windowOpen ? .regular : .accessory
+        guard NSApp.activationPolicy() != policy else { return }
+        NSApp.setActivationPolicy(policy)
+        if windowOpen { NSApp.activate(ignoringOtherApps: true) }
     }
 
     func showSettings() {
