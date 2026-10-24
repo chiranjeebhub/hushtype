@@ -107,6 +107,7 @@ final class SettingsWindowController {
     private let navigation = SettingsNavigation()
     private var window: NSWindow?
     private var titleSubscription: AnyCancellable?
+    private var windowObservers: [NSObjectProtocol] = []
 
     init(settings: SettingsStore, controller: DictationController, updater: Updater, runSetup: @escaping () -> Void) {
         self.settings = settings
@@ -134,13 +135,44 @@ final class SettingsWindowController {
             // The title is hidden but still names the window in the Window menu and Mission Control.
             titleSubscription = navigation.$pane.sink { [weak window] in window?.title = $0.title }
             self.window = window
+            // AppKit puts the buttons back after resizing and full screen, so place them again.
+            for name in [NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
+                         NSWindow.didExitFullScreenNotification, NSWindow.didBecomeKeyNotification] {
+                windowObservers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.placeWindowButtons() }
+                })
+            }
         }
+        placeWindowButtons()
         if let tab, let pane = SettingsPane.named(tab) {
             navigation.pane = pane
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
         window?.makeFirstResponder(nil)
+    }
+}
+
+extension SettingsWindowController {
+    /// Where the close, minimise and zoom buttons sit: inside the sidebar's top-left corner, as in
+    /// the design, rather than hard against the window edge.
+    static let windowButtonInset = CGPoint(x: 21, y: 20)
+
+    fileprivate func placeWindowButtons() {
+        guard let window, !window.styleMask.contains(.fullScreen),
+              let close = window.standardWindowButton(.closeButton),
+              let titlebar = close.superview, let container = titlebar.superview else { return }
+        let size = close.frame.size
+        // A taller title bar, so the buttons can sit lower without being clipped.
+        let height = Self.windowButtonInset.y * 2 + size.height
+        container.frame = NSRect(x: 0, y: window.frame.height - height, width: window.frame.width, height: height)
+        titlebar.frame = container.bounds
+        let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        for (index, type) in buttons.enumerated() {
+            window.standardWindowButton(type)?.setFrameOrigin(
+                NSPoint(x: Self.windowButtonInset.x + CGFloat(index) * (size.width + 6),
+                        y: Self.windowButtonInset.y))
+        }
     }
 }
 
@@ -242,7 +274,7 @@ private struct SettingsSidebar: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.top, 36)
+        .padding(.top, 46)
         .padding(.bottom, 10)
         .background {
             // ⌘F jumps to search, as in System Settings.
