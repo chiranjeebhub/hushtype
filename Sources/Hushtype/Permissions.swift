@@ -88,8 +88,35 @@ enum Permission: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The TCC service name `tccutil` uses, for the permissions System Settings can get stuck on.
+    private var tccService: String? {
+        switch self {
+        case .microphone: return nil
+        case .inputMonitoring: return "ListenEvent"
+        case .accessibility: return "Accessibility"
+        }
+    }
+
+    var canReset: Bool { tccService != nil }
+
+    /// Fixes a switch that's on in System Settings but doesn't count. That happens when the entry
+    /// belongs to an earlier build signed with a different certificate: macOS shows it as on, but
+    /// it doesn't match this copy. This clears Hushtype's entry, so the next Allow asks afresh, and
+    /// relaunches, since the grant only applies to a new process.
+    @MainActor
+    func resetAndRelaunch() {
+        guard let service = tccService, let bundleID = Bundle.main.bundleIdentifier else { return }
+        let reset = Process()
+        reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        reset.arguments = ["reset", service, bundleID]
+        try? reset.run()
+        reset.waitUntilExit()
+        UserDefaults.standard.set(false, forKey: promptedKey)
+        Permissions.relaunch()
+    }
+
     private var promptedKey: String { "prompted.\(rawValue)" }
-    private var promptedBefore: Bool { UserDefaults.standard.bool(forKey: promptedKey) }
+    var promptedBefore: Bool { UserDefaults.standard.bool(forKey: promptedKey) }
     private func markPrompted() { UserDefaults.standard.set(true, forKey: promptedKey) }
 }
 

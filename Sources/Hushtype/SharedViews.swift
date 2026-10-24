@@ -60,6 +60,8 @@ struct PermissionRow: View {
     var needsRestart = false
 
     @State private var requested = false
+    /// Set a while after Allow when the permission still isn't granted, to offer the reset.
+    @State private var seemsStuck = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -70,11 +72,37 @@ struct PermissionRow: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if showStuckHelp {
+                    HStack(spacing: 6) {
+                        Text("Already switched on but still not ticked?")
+                            .font(.callout.weight(.medium))
+                        Button("Reset and Restart") { permission.resetAndRelaunch() }
+                            .buttonStyle(.link)
+                    }
+                    .padding(.top, 4)
+                    .transition(.opacity)
+                }
             }
             Spacer(minLength: 12)
             trailing
         }
         .animation(.easeOut(duration: 0.2), value: granted)
+        .animation(.easeOut(duration: 0.2), value: seemsStuck)
+        // Also offer the fix up front when macOS has prompted before, since an old switch may
+        // already be sitting in System Settings.
+        .onAppear { if permission.canReset && permission.promptedBefore { offerHelpLater(after: 3) } }
+    }
+
+    private var showStuckHelp: Bool { seemsStuck && !granted && !needsRestart && permission.canReset }
+
+    private func allow() {
+        requested = true
+        permission.request()
+        offerHelpLater(after: 8)
+    }
+
+    private func offerHelpLater(after seconds: Double) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { seemsStuck = true }
     }
 
     private var detail: String {
@@ -93,10 +121,10 @@ struct PermissionRow: View {
                 .foregroundStyle(.green)
                 .transition(.scale.combined(with: .opacity))
         } else if emphasized {
-            Button("Allow") { requested = true; permission.request() }
+            Button("Allow", action: allow)
                 .buttonStyle(.borderedProminent)
         } else {
-            Button("Allow") { requested = true; permission.request() }
+            Button("Allow", action: allow)
         }
     }
 }
