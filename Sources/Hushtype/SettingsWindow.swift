@@ -2,9 +2,22 @@ import AppKit
 import HushtypeCore
 import SwiftUI
 
-/// A standard macOS preferences window: toolbar tabs, one grouped form per tab.
+/// Toolbar tabs that title the window after the selected tab, like System Settings, and keep any
+/// text field from grabbing focus when a tab opens.
+private final class SettingsTabViewController: NSTabViewController {
+    override func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
+        super.tabView(tabView, didSelect: tabViewItem)
+        view.window?.title = tabViewItem?.label ?? "Hushtype Settings"
+        DispatchQueue.main.async { [weak self] in self?.view.window?.makeFirstResponder(nil) }
+    }
+}
+
+/// A standard macOS preferences window: toolbar tabs, one grouped form per tab, all the same size.
 @MainActor
 final class SettingsWindowController {
+    /// Every pane uses this size so the window doesn't jump when switching tabs.
+    static let paneSize = CGSize(width: 520, height: 500)
+
     private let settings: SettingsStore
     private let controller: DictationController
     private let runSetup: () -> Void
@@ -21,7 +34,7 @@ final class SettingsWindowController {
     /// Opens the window, optionally on the tab with this label (e.g. "Claude").
     func show(tab: String? = nil) {
         if window == nil {
-            let tabs = NSTabViewController()
+            let tabs = SettingsTabViewController()
             self.tabs = tabs
             tabs.tabStyle = .toolbar
             tabs.addTabViewItem(item("General", "gearshape",
@@ -34,6 +47,7 @@ final class SettingsWindowController {
             window.styleMask = [.titled, .closable]
             window.toolbarStyle = .preference
             window.isReleasedWhenClosed = false
+            window.title = tabs.tabViewItems.first?.label ?? "Hushtype Settings"
             window.center()
             self.window = window
         }
@@ -42,10 +56,11 @@ final class SettingsWindowController {
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+        window?.makeFirstResponder(nil)
     }
 
     private func item<Content: View>(_ label: String, _ symbol: String, _ view: Content) -> NSTabViewItem {
-        let host = NSHostingController(rootView: view.frame(width: 520))
+        let host = NSHostingController(rootView: view.frame(width: Self.paneSize.width, height: Self.paneSize.height))
         host.sizingOptions = .preferredContentSize
         let item = NSTabViewItem(viewController: host)
         item.label = label
@@ -86,16 +101,24 @@ private struct GeneralPane: View {
                     ForEach(languages) { Text($0.name).tag($0.id) }
                 }
                 .onChange(of: settings.language) { controller.prepareSpeechModel() }
+                Toggle("Play a sound when listening starts and stops", isOn: $settings.soundsEnabled)
             } header: {
                 Text("Dictation")
             } footer: {
-                if settings.triggerKey == .fn {
-                    Text("Set System Settings › Keyboard › “Press 🌐 key to” to “Do Nothing” so macOS doesn't also react to Fn.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Hold the key to talk and let go to insert. Press any other key while holding to cancel.")
-                        .foregroundStyle(.secondary)
-                }
+                Footnote(settings.triggerKey == .fn
+                         ? "Set System Settings › Keyboard › “Press 🌐 key to” to “Do Nothing” so macOS doesn't also react to Fn."
+                         : "Hold the key to talk and let go to insert. Press any other key while holding to cancel.")
+            }
+
+            Section {
+                Toggle("Always-ready microphone", isOn: $settings.alwaysReadyMic)
+                    .onChange(of: settings.alwaysReadyMic) { controller.applyMicMode() }
+            } header: {
+                Text("Microphone")
+            } footer: {
+                Footnote(settings.alwaysReadyMic
+                         ? "The mic stays open, so dictation starts the instant you press and catches a word you began a beat early. macOS shows its orange mic dot the whole time. Nothing is kept or sent until you press."
+                         : "The mic stays open for 30 seconds after you dictate, so the next one starts instantly. Turn this on to keep it ready all the time.")
             }
 
             Section("System") {
@@ -107,7 +130,6 @@ private struct GeneralPane: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 300)
     }
 }
 
@@ -119,13 +141,28 @@ private struct ClaudePane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             PolishCard(settings: settings)
-            Text("Speech is transcribed on this Mac. Only the text is sent to Claude for polishing.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Spacer()
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    privacyRow("lock.laptopcomputer", .teal, "Speech stays on this Mac",
+                               "Your voice is transcribed on-device by macOS. Audio is never uploaded.")
+                    Divider()
+                    privacyRow("text.bubble", .pink, "Only text goes to Claude",
+                               "The transcript is sent with your own key for polishing, then inserted.")
+                }
+            }
+            Spacer(minLength: 0)
         }
         .padding(20)
-        .frame(height: 360)
+    }
+
+    private func privacyRow(_ symbol: String, _ color: Color, _ title: String, _ detail: String) -> some View {
+        HStack(spacing: 12) {
+            IconTile(symbol: symbol, color: color, size: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.callout.weight(.semibold))
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
@@ -139,17 +176,15 @@ private struct DictionaryPane: View {
             Section {
                 TextEditor(text: $settings.dictionaryText)
                     .font(.body.monospaced())
-                    .frame(height: 220)
+                    .frame(height: 200)
                     .scrollContentBackground(.hidden)
             } header: {
                 Text("Words to always get right")
             } footer: {
-                Text("One name, product or term per line. \(settings.vocabulary.count) terms. Used when transcribing and polishing.")
-                    .foregroundStyle(.secondary)
+                Footnote("One name, product or term per line. \(settings.vocabulary.count) terms. Used when transcribing and polishing.")
             }
         }
         .formStyle(.grouped)
-        .frame(height: 380)
     }
 }
 
@@ -173,17 +208,28 @@ private struct PermissionsPane: View {
                         Button("Restart") { Permissions.relaunch() }
                     }
                 } else {
-                    Text("Changes in System Settings show up here immediately.")
-                        .foregroundStyle(.secondary)
+                    Footnote("Changes in System Settings show up here immediately.")
                 }
             }
         }
         .formStyle(.grouped)
-        .frame(height: 330)
         .onAppear { permissions.start() }
         .onDisappear { permissions.stop() }
         .onChange(of: permissions.granted) {
             if permissions.isGranted(.inputMonitoring) && !controller.hotkeyActive { controller.restartHotkey() }
         }
+    }
+}
+
+/// Section footer text, left-aligned to line up with the rows above it.
+private struct Footnote: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
