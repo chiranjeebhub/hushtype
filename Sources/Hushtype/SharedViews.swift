@@ -343,6 +343,11 @@ extension NSWindow {
     /// Puts the window in the middle of the screen the pointer is on. AppKit's `center()` sits it a third of
     /// the way down, and on whichever screen it picks.
     func centerOnActiveScreen() {
+        // A new SwiftUI window has no size until its first layout, and then grows down and to the right from
+        // wherever it was placed, so size it from its content first.
+        if frame.width < 10, let fitting = contentViewController?.view.fittingSize, fitting.width > 0 {
+            setContentSize(fitting)
+        }
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main
         else { return center() }
