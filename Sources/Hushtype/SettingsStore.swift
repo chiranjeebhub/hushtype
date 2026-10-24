@@ -29,6 +29,18 @@ final class SettingsStore: ObservableObject {
     @Published var soundsEnabled: Bool { didSet { defaults.set(soundsEnabled, forKey: "soundsEnabled") } }
     /// Keep the mic open all the time so dictation starts instantly and catches the first word.
     @Published var alwaysReadyMic: Bool { didSet { defaults.set(alwaysReadyMic, forKey: "alwaysReadyMic") } }
+    /// Send the app name and the text around the cursor to Claude, so it matches tone and spelling.
+    @Published var useContext: Bool { didSet { defaults.set(useContext, forKey: "useContext") } }
+    /// Add a word to the dictionary when the user respells it after Hushtype typed it.
+    @Published var learnFromCorrections: Bool { didSet { defaults.set(learnFromCorrections, forKey: "learnFromCorrections") } }
+    /// Spoken shortcuts that expand to saved text.
+    @Published var snippets: [Snippet] {
+        didSet { defaults.set(try? JSONEncoder().encode(snippets), forKey: "snippets") }
+    }
+    /// Save recent dictations on disk so they're there after a restart.
+    @Published var keepHistory: Bool { didSet { defaults.set(keepHistory, forKey: "keepHistory") } }
+    /// Double-tap the dictation key to keep listening without holding it.
+    @Published var handsFree: Bool { didSet { defaults.set(handsFree, forKey: "handsFree") } }
     @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
     /// Where setup resumes after Hushtype relaunches itself mid-onboarding.
     @Published var onboardingStep: Int { didSet { defaults.set(onboardingStep, forKey: "onboardingStep") } }
@@ -40,11 +52,27 @@ final class SettingsStore: ObservableObject {
         dictionaryText = defaults.string(forKey: "dictionary") ?? ""
         soundsEnabled = defaults.object(forKey: "soundsEnabled") as? Bool ?? true
         alwaysReadyMic = defaults.bool(forKey: "alwaysReadyMic")
+        useContext = defaults.object(forKey: "useContext") as? Bool ?? true
+        learnFromCorrections = defaults.object(forKey: "learnFromCorrections") as? Bool ?? true
+        snippets = (defaults.data(forKey: "snippets")).flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
+        keepHistory = defaults.object(forKey: "keepHistory") as? Bool ?? true
+        handsFree = defaults.object(forKey: "handsFree") as? Bool ?? true
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         onboardingStep = defaults.integer(forKey: "onboardingStep")
     }
 
     var vocabulary: [String] { DictationPipeline.vocabulary(from: dictionaryText) }
+
+    /// Appends terms that aren't in the dictionary yet, one per line.
+    func addToDictionary(_ terms: [String]) {
+        var known = Set(vocabulary.map { $0.lowercased() })
+        var text = dictionaryText
+        for term in terms where known.insert(term.lowercased()).inserted {
+            if !text.isEmpty && !text.hasSuffix("\n") { text += "\n" }
+            text += term
+        }
+        dictionaryText = text
+    }
 
     var transcriptionOptions: TranscriptionOptions {
         TranscriptionOptions(language: language == "auto" ? nil : language, vocabulary: vocabulary)
@@ -62,6 +90,12 @@ final class SettingsStore: ObservableObject {
             Keychain.write(trimmed, account: service.rawValue)
         }
         objectWillChange.send()
+    }
+
+    /// Command mode always needs Claude, even with polishing turned off.
+    func makeAssistant() -> TranscriptCleaner? {
+        let key = apiKey(.anthropic)
+        return key.isEmpty ? nil : TranscriptCleaner(apiKey: key)
     }
 
     func makeCleaner() -> TranscriptCleaner? {

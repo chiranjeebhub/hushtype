@@ -11,11 +11,12 @@ public final class AppleSpeechTranscriber: @unchecked Sendable {
     private let audioInput: AsyncStream<AVAudioPCMBuffer>.Continuation
     private var work: Task<String, Error>!
 
-    public init(options: TranscriptionOptions) {
+    /// - Parameter nearbyTerms: names seen around the cursor, gathered while the analyzer starts up.
+    public init(options: TranscriptionOptions, nearbyTerms: @escaping @Sendable () async -> [String] = { [] }) {
         (audio, audioInput) = AsyncStream.makeStream(of: AVAudioPCMBuffer.self)
         let audio = self.audio
         // Buffers that arrive before the analyzer is ready wait in the stream, so nothing is lost.
-        work = Task { try await Self.run(audio: audio, options: options) }
+        work = Task { try await Self.run(audio: audio, options: options, nearbyTerms: nearbyTerms) }
     }
 
     /// Feeds a buffer from the microphone. Safe to call from the audio thread.
@@ -34,7 +35,8 @@ public final class AppleSpeechTranscriber: @unchecked Sendable {
         work.cancel()
     }
 
-    private static func run(audio: AsyncStream<AVAudioPCMBuffer>, options: TranscriptionOptions) async throws -> String {
+    private static func run(audio: AsyncStream<AVAudioPCMBuffer>, options: TranscriptionOptions,
+                            nearbyTerms: @Sendable () async -> [String]) async throws -> String {
         guard let locale = await AppleSpeechModel.locale(for: options.language) else {
             throw HushtypeError.speechUnavailable("On-device dictation doesn't support this language yet.")
         }
@@ -48,9 +50,11 @@ public final class AppleSpeechTranscriber: @unchecked Sendable {
             throw HushtypeError.speechUnavailable("No audio format available for on-device dictation.")
         }
 
-        if !options.vocabulary.isEmpty {
+        var terms = options.vocabulary
+        for term in await nearbyTerms() where !terms.contains(term) { terms.append(term) }
+        if !terms.isEmpty {
             let context = AnalysisContext()
-            context.contextualStrings[.general] = options.vocabulary
+            context.contextualStrings[.general] = terms
             try await analyzer.setContext(context)
         }
 

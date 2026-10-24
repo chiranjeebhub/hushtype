@@ -9,13 +9,19 @@ let package = Package(
         .executable(name: "Hushtype", targets: ["Hushtype"]),
         .library(name: "HushtypeCore", targets: ["HushtypeCore"]),
     ],
+    dependencies: [
+        // Auto-updates for builds distributed outside the App Store.
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
+    ],
     targets: [
         // Pure pipeline logic: on-device speech-to-text and Claude cleanup. No AppKit.
         .target(name: "HushtypeCore"),
         // The menu bar app: hotkey, recording, overlay, text insertion, settings.
         .executableTarget(
             name: "Hushtype",
-            dependencies: ["HushtypeCore"]
+            dependencies: ["HushtypeCore", .product(name: "Sparkle", package: "Sparkle")],
+            // The app bundle carries Sparkle.framework in Contents/Frameworks.
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         .testTarget(
             name: "HushtypeCoreTests",

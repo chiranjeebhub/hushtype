@@ -8,7 +8,7 @@ final class OverlayPanel {
     private let panel: NSPanel
 
     init(controller: DictationController) {
-        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 220, height: 44),
+        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 380, height: 44),
                         styleMask: [.nonactivatingPanel, .borderless],
                         backing: .buffered, defer: true)
         panel.isFloatingPanel = true
@@ -43,13 +43,24 @@ private struct OverlayView: View {
         HStack(spacing: 10) {
             switch controller.phase {
             case .recording:
-                Circle().fill(.red).frame(width: 8, height: 8)
+                Circle().fill(controller.isCommand ? .purple : .red).frame(width: 8, height: 8)
+                if controller.isCommand {
+                    Label("Command", systemImage: "wand.and.stars").labelStyle(.titleAndIcon)
+                }
                 LevelBars(level: controller.level)
+                if controller.isHandsFree {
+                    Image(systemName: "lock.fill").foregroundStyle(.white.opacity(0.8))
+                    Text("Tap to finish · Esc to cancel").foregroundStyle(.white.opacity(0.8))
+                }
             case .transcribing, .cleaning:
                 ProgressView().controlSize(.small)
-                Text(controller.phase == .transcribing ? "Transcribing…" : "Polishing…")
+                Text(controller.isCommand ? "Working on it…"
+                     : controller.phase == .transcribing ? "Transcribing…" : "Polishing…")
             case .error(let message):
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                Text(message).lineLimit(1)
+            case .notice(let message):
+                Image(systemName: "info.circle.fill").foregroundStyle(.white.opacity(0.8))
                 Text(message).lineLimit(1)
             case .idle:
                 EmptyView()

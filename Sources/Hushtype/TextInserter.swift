@@ -27,6 +27,30 @@ enum TextInserter {
         }
     }
 
+    /// Copies the frontmost app's selection with ⌘C and puts the clipboard back. For apps that
+    /// don't report their selection through Accessibility. Returns nil when nothing was copied.
+    @MainActor
+    static func copySelection() async -> String? {
+        let pasteboard = NSPasteboard.general
+        let saved = snapshot(pasteboard)
+        let before = pasteboard.changeCount
+        postKey(8, flags: .maskCommand) // kVK_ANSI_C
+        var copied: String?
+        for _ in 0..<10 {
+            try? await Task.sleep(for: .milliseconds(25))
+            if pasteboard.changeCount != before {
+                copied = pasteboard.string(forType: .string)
+                break
+            }
+        }
+        if pasteboard.changeCount != before {
+            pasteboard.clearContents()
+            if !saved.isEmpty { pasteboard.writeObjects(saved) }
+        }
+        guard let copied, !copied.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return copied
+    }
+
     private static func snapshot(_ pasteboard: NSPasteboard) -> [NSPasteboardItem] {
         (pasteboard.pasteboardItems ?? []).map { item in
             let copy = NSPasteboardItem()
@@ -38,12 +62,15 @@ enum TextInserter {
     }
 
     private static func postCommandV() {
+        postKey(9, flags: .maskCommand) // kVK_ANSI_V
+    }
+
+    private static func postKey(_ key: CGKeyCode, flags: CGEventFlags) {
         let source = CGEventSource(stateID: .combinedSessionState)
-        let vKey: CGKeyCode = 9 // kVK_ANSI_V
-        let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true)
-        let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
-        down?.flags = .maskCommand
-        up?.flags = .maskCommand
+        let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true)
+        let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)
+        down?.flags = flags
+        up?.flags = flags
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
     }
