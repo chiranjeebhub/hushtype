@@ -67,6 +67,9 @@ final class SettingsWindowController {
     private func item<Content: View>(_ label: String, _ symbol: String, _ view: Content) -> NSTabViewItem {
         let host = NSHostingController(rootView: view.frame(width: Self.paneSize.width, height: Self.paneSize.height))
         host.sizingOptions = .preferredContentSize
+        // NSTabViewController titles the window after the selected child's `title`, which a hosting
+        // controller leaves nil ("Untitled"), sometimes after our own didSelect has run.
+        host.title = label
         let item = NSTabViewItem(viewController: host)
         item.label = label
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
