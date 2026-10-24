@@ -156,9 +156,9 @@ final class SettingsWindowController {
 }
 
 extension SettingsWindowController {
-    /// The title bar's height, tall enough for the window buttons to sit inside the sidebar's
-    /// top-left corner, as in the design, rather than hard against the window edge.
-    static let titlebarHeight: CGFloat = 56
+    /// The title bar's height, tall enough for the window buttons to sit at the top of the
+    /// full-height sidebar, as in the design.
+    static let titlebarHeight: CGFloat = 40
 
     fileprivate func placeWindowButtons() {
         guard let window, let close = window.standardWindowButton(.closeButton),
@@ -179,8 +179,8 @@ extension SettingsWindowController {
         }()
         if buttons.superview !== titlebar { titlebar.addSubview(buttons) }
         let size = buttons.fittingSize
-        // The first button's centre sits 28 points in from the window's top-left corner.
-        buttons.frame = NSRect(x: 28 - size.height / 2, y: Self.titlebarHeight - 28 - size.height / 2,
+        // The first button's centre sits 20 points in from the window's top-left corner.
+        buttons.frame = NSRect(x: 20 - size.height / 2, y: Self.titlebarHeight - 20 - size.height / 2,
                                width: size.width, height: size.height)
     }
 }
@@ -242,10 +242,11 @@ private struct SettingsRoot: View {
             SettingsSidebar(selection: $navigation.pane, settings: settings, controller: controller,
                             permissions: permissions)
                 .frame(width: 228)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
-                .padding(8)
+                .frame(maxHeight: .infinity)
+                .background(Color.primary.opacity(0.035))
+                .overlay(alignment: .trailing) {
+                    Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 0.5)
+                }
             detail
                 .buttonStyle(.settings)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -327,9 +328,9 @@ private struct SettingsSidebar: View {
                 selection = .permissions
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 46)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 12)
+        .padding(.top, 44)
+        .padding(.bottom, 12)
         .background {
             // ⌘F jumps to search, as in System Settings.
             Button("") { searchFocused = true }
