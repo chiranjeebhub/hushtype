@@ -14,6 +14,8 @@ struct HushtypeApp: App {
                         openSetup: appDelegate.showOnboarding,
                         openHistory: appDelegate.showHistory,
                         updater: appDelegate.updater)
+                // Menus drop item icons unless asked to show them.
+                .labelStyle(.titleAndIcon)
         } label: {
             MenuBarIcon(controller: appDelegate.controller)
         }
