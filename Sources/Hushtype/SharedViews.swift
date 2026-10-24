@@ -310,3 +310,16 @@ enum LaunchAtLogin {
         }
     }
 }
+
+extension NSWindow {
+    /// Puts the window in the middle of the screen the pointer is on. AppKit's `center()` sits it a third of
+    /// the way down, and on whichever screen it picks.
+    func centerOnActiveScreen() {
+        let mouse = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main
+        else { return center() }
+        let visible = screen.visibleFrame
+        setFrameOrigin(NSPoint(x: (visible.midX - frame.width / 2).rounded(),
+                               y: (visible.midY - frame.height / 2).rounded()))
+    }
+}

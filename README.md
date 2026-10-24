@@ -41,12 +41,12 @@ open dist/Hushtype.app
 You can also open `Package.swift` in Xcode to edit and debug, but permissions such as the microphone need the
 bundled app from the script, since a bare executable has no `Info.plist`.
 
-On first launch a short guided setup walks through **Microphone**, **Input Monitoring** and **Accessibility** (each
+On first launch a short guided setup walks through **Microphone** and **Accessibility** (each
 step notices the grant by itself and moves on, and restarts Hushtype for you when macOS requires it), checks your
 downloads the on-device voice model, checks your Anthropic key as you paste it, and ends with a practice field to try your first dictation.
 Run it again any time from Settings › General.
 
-macOS ties Accessibility and Input Monitoring grants to the code signature, and the default ad-hoc signature changes
+macOS ties Accessibility grants to the code signature, and the default ad-hoc signature changes
 with every build. To keep grants across rebuilds, create a self-signed code-signing certificate in Keychain Access
 and build with `HUSHTYPE_SIGN_IDENTITY="Your Cert Name" scripts/build-app.sh`.
 

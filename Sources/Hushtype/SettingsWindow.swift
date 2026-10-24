@@ -132,7 +132,7 @@ final class SettingsWindowController {
             window.setContentSize(Self.defaultSize)
             window.contentMinSize = Self.minimumSize
             window.setFrameAutosaveName("HushtypeSettings")
-            if !window.setFrameUsingName("HushtypeSettings") { window.center() }
+            if !window.setFrameUsingName("HushtypeSettings") { window.centerOnActiveScreen() }
             // The title is hidden but still names the window in the Window menu and Mission Control.
             titleSubscription = navigation.$pane.sink { [weak window] in window?.title = $0.title }
             self.window = window
@@ -260,7 +260,7 @@ private struct SettingsRoot: View {
         .onAppear { permissions.start() }
         .onDisappear { permissions.stop() }
         .onChange(of: permissions.granted) {
-            if permissions.isGranted(.inputMonitoring) && !controller.hotkeyActive { controller.restartHotkey() }
+            if permissions.isGranted(.accessibility) && !controller.hotkeyActive { controller.restartHotkey() }
         }
     }
 
@@ -675,7 +675,7 @@ private struct KeyTester: View {
                 if listening {
                     Text("Hushtype hears you. Let go to insert.")
                 } else if !controller.hotkeyActive {
-                    Text("The key turns on once Input Monitoring is allowed.")
+                    Text("The key turns on once Accessibility is allowed.")
                 } else {
                     Text("Hold **\(key.shortName)** to test it. The bars move when Hushtype hears you.")
                 }
@@ -1299,7 +1299,7 @@ private struct PermissionsPane: View {
                 }
             }
             HStack(spacing: 8) {
-                if permissions.isGranted(.inputMonitoring) && !controller.hotkeyActive {
+                if permissions.isGranted(.accessibility) && !controller.hotkeyActive {
                     Text("Restart Hushtype to finish turning on the dictation key.")
                     Spacer()
                     Button("Restart") { Permissions.relaunch() }.buttonStyle(.borderedProminent)

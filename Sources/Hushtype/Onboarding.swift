@@ -39,9 +39,10 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
             window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
             window.delegate = self
-            window.center()
             self.window = window
         }
+        // Center every time it's shown, so it never turns up off to the side or on another screen.
+        window?.centerOnActiveScreen()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
         window?.makeFirstResponder(nil)
@@ -69,7 +70,6 @@ struct OnboardingView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Divider()
             VStack(alignment: .leading, spacing: 0) {
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -207,8 +207,8 @@ struct OnboardingView: View {
         Permission.allCases.first { !permissions.isGranted($0) }
     }
 
-    private var inputMonitoringNeedsRestart: Bool {
-        permissions.isGranted(.inputMonitoring) && !controller.hotkeyActive
+    private var hotkeyNeedsRestart: Bool {
+        permissions.isGranted(.accessibility) && !controller.hotkeyActive
     }
 
     private var permissionsStep: some View {
@@ -220,12 +220,12 @@ struct OnboardingView: View {
                         PermissionRow(permission: permission,
                                       granted: permissions.isGranted(permission),
                                       emphasized: permission == nextPermission,
-                                      needsRestart: permission == .inputMonitoring && inputMonitoringNeedsRestart)
+                                      needsRestart: permission == .accessibility && hotkeyNeedsRestart)
                         if permission != Permission.allCases.last { Divider() }
                     }
                 }
             }
-            if inputMonitoringNeedsRestart {
+            if hotkeyNeedsRestart {
                 Text("Setup will pick up right here after the restart.")
                     .font(.caption).foregroundStyle(.secondary)
                     .padding(.top, 8)
@@ -431,7 +431,7 @@ struct OnboardingView: View {
     }
 
     private func permissionsChanged() {
-        if permissions.isGranted(.inputMonitoring) && !controller.hotkeyActive {
+        if permissions.isGranted(.accessibility) && !controller.hotkeyActive {
             controller.restartHotkey()
             // If the tap still can't start, the row offers a restart; resume here afterwards.
             if !controller.hotkeyActive { settings.onboardingStep = OnboardingStep.permissions.rawValue }
