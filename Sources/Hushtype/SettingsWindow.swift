@@ -16,7 +16,7 @@ private final class SettingsTabViewController: NSTabViewController {
 @MainActor
 final class SettingsWindowController {
     /// Every pane uses this size so the window doesn't jump when switching tabs.
-    static let paneSize = CGSize(width: 520, height: 480)
+    static let paneSize = CGSize(width: 520, height: 500)
 
     private let settings: SettingsStore
     private let controller: DictationController
