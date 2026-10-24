@@ -231,13 +231,17 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 0) {
             header("Download the voice model", "Hushtype turns speech into text right on this Mac with Apple's speech model. It downloads once and works offline after that.")
             Card {
-                HStack(alignment: .top, spacing: 14) {
+                HStack(alignment: modelStatus == .installed ? .center : .top, spacing: 14) {
                     IconTile(symbol: modelStatus == .installed ? "checkmark" : "waveform",
                              color: modelStatus == .installed ? .green : .purple, size: 34)
                     VStack(alignment: .leading, spacing: 8) {
                         switch modelStatus {
                         case .installed:
-                            Text("Voice model ready").font(.body.weight(.semibold))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Voice model ready").font(.body.weight(.semibold))
+                                Text("\(languageName) · runs on this Mac, works offline")
+                                    .font(.callout).foregroundStyle(.secondary)
+                            }
                         case .unsupported:
                             Text("This language isn't supported on-device yet. Pick another one in Settings › General.")
                                 .foregroundStyle(.orange)
@@ -260,16 +264,30 @@ struct OnboardingView: View {
         modelError = nil
         Task {
             modelStatus = await AppleSpeechModel.status(language: language)
-            guard modelStatus == .notInstalled else { return }
-            do {
-                try await AppleSpeechModel.install(language: language) { value in
-                    Task { @MainActor in modelProgress = value }
+            let downloading = modelStatus == .notInstalled
+            if downloading {
+                do {
+                    try await AppleSpeechModel.install(language: language) { value in
+                        Task { @MainActor in modelProgress = value }
+                    }
+                    modelStatus = await AppleSpeechModel.status(language: language)
+                } catch {
+                    modelError = error.localizedDescription
+                    return
                 }
-                modelStatus = await AppleSpeechModel.status(language: language)
-            } catch {
-                modelError = error.localizedDescription
+            }
+            // Nothing to decide on this step, so move on by itself once a download finishes.
+            // (Coming back to it with Back shouldn't bounce you forward again.)
+            if downloading && modelStatus == .installed && step == .speechModel {
+                try? await Task.sleep(for: .seconds(1.2))
+                if step == .speechModel { go(to: .claude) }
             }
         }
+    }
+
+    private var languageName: String {
+        let code = settings.transcriptionOptions.language ?? Locale.current.language.languageCode?.identifier ?? "en"
+        return Locale.current.localizedString(forLanguageCode: code)?.capitalized ?? code
     }
 
     private var claudeStep: some View {
