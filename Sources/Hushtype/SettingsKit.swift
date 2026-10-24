@@ -62,9 +62,35 @@ struct SettingsPage<Content: View>: View {
     }
 }
 
+/// The quiet rounded button used throughout Settings, in place of the system's tinted one.
+struct SettingsButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.controlSize) private var controlSize
+
+    func makeBody(configuration: Configuration) -> some View {
+        let small = controlSize == .small || controlSize == .mini
+        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+        return configuration.label
+            .font(small ? .caption : .callout)
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, small ? 9 : 11)
+            .padding(.vertical, small ? 3 : 5)
+            .background(shape.fill(Color.primary.opacity(configuration.isPressed ? 0.16 : 0.09)))
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+            .opacity(isEnabled ? 1 : 0.45)
+            .contentShape(shape)
+    }
+}
+
+extension ButtonStyle where Self == SettingsButtonStyle {
+    static var settings: SettingsButtonStyle { SettingsButtonStyle() }
+}
+
 /// A small uppercase heading above a card, with optional text on the right.
 struct SectionLabel<Trailing: View>: View {
     let title: String
+    /// The first thing on a page sits right under the page header.
+    var isFirst = false
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
@@ -76,15 +102,15 @@ struct SectionLabel<Trailing: View>: View {
             Spacer()
             trailing.font(.caption).foregroundStyle(.tertiary)
         }
-        .padding(.top, 24)
+        .padding(.top, isFirst ? 0 : 24)
         .padding(.bottom, 8)
         .padding(.horizontal, 2)
     }
 }
 
 extension SectionLabel where Trailing == EmptyView {
-    init(_ title: String) {
-        self.init(title: title) { EmptyView() }
+    init(_ title: String, isFirst: Bool = false) {
+        self.init(title: title, isFirst: isFirst) { EmptyView() }
     }
 }
 

@@ -164,7 +164,7 @@ private struct SettingsRoot: View {
                     .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
                 .padding(8)
             detail
-                .buttonStyle(.bordered)
+                .buttonStyle(.settings)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .id(navigation.pane)
                 .transition(.opacity)
@@ -509,7 +509,7 @@ private struct DictationPane: View {
 
     var body: some View {
         SettingsPage(pane: .dictation) {
-            SectionLabel("Dictation key")
+            SectionLabel("Dictation key", isFirst: true)
             HStack(spacing: 12) {
                 ForEach(TriggerKey.allCases) { key in
                     KeyChoiceTile(key: key, selected: settings.triggerKey == key) { settings.triggerKey = key }
