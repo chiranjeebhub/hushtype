@@ -67,6 +67,12 @@ final class SettingsStore: ObservableObject {
         objectWillChange.send()
     }
 
+    /// Command mode always needs Claude, even with polishing turned off.
+    func makeAssistant() -> TranscriptCleaner? {
+        let key = apiKey(.anthropic)
+        return key.isEmpty ? nil : TranscriptCleaner(apiKey: key)
+    }
+
     func makeCleaner() -> TranscriptCleaner? {
         let key = apiKey(.anthropic)
         guard cleanupEnabled, !key.isEmpty else { return nil }

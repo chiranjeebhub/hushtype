@@ -43,11 +43,15 @@ private struct OverlayView: View {
         HStack(spacing: 10) {
             switch controller.phase {
             case .recording:
-                Circle().fill(.red).frame(width: 8, height: 8)
+                Circle().fill(controller.isCommand ? .purple : .red).frame(width: 8, height: 8)
+                if controller.isCommand {
+                    Label("Command", systemImage: "wand.and.stars").labelStyle(.titleAndIcon)
+                }
                 LevelBars(level: controller.level)
             case .transcribing, .cleaning:
                 ProgressView().controlSize(.small)
-                Text(controller.phase == .transcribing ? "Transcribing…" : "Polishing…")
+                Text(controller.isCommand ? "Working on it…"
+                     : controller.phase == .transcribing ? "Transcribing…" : "Polishing…")
             case .error(let message):
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
                 Text(message).lineLimit(1)

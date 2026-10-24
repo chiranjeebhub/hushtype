@@ -33,6 +33,8 @@ final class DictationController: ObservableObject {
     @Published private(set) var level: Float = 0
     @Published private(set) var history: [DictationResult] = []
     @Published private(set) var hotkeyActive = false
+    /// The current recording is a spoken command for the selected text, not dictation.
+    @Published private(set) var isCommand = false
 
     private let settings: SettingsStore
     private let hotkey = HotkeyMonitor()
@@ -53,6 +55,7 @@ final class DictationController: ObservableObject {
         hotkey.onPress = { [weak self] in Task { @MainActor in self?.beginRecording() } }
         hotkey.onRelease = { [weak self] in Task { @MainActor in self?.finishRecording() } }
         hotkey.onCancel = { [weak self] in Task { @MainActor in self?.cancelRecording() } }
+        hotkey.onCommand = { [weak self] in Task { @MainActor in self?.switchToCommand() } }
         recorder.onLevel = { [weak self] value in Task { @MainActor in self?.level = value } }
         observeSleepAndLock()
     }
@@ -61,7 +64,7 @@ final class DictationController: ObservableObject {
         if !hotkeyActive { return "Finish setup to turn on the dictation key" }
         switch phase {
         case .idle: return "Hold \(settings.triggerKey.displayName) to dictate"
-        case .recording: return "Listening…"
+        case .recording: return isCommand ? "Listening for a command…" : "Listening…"
         case .transcribing: return "Transcribing…"
         case .cleaning: return "Polishing…"
         case .error(let message), .notice(let message): return message
@@ -183,15 +186,22 @@ final class DictationController: ObservableObject {
         reset()
     }
 
-    /// Starts reading the frontmost app and the text around its cursor, when context is on.
+    /// Starts reading the frontmost app, its selection, and (when context is on) the text around
+    /// its cursor.
     private func captureFocus() -> Task<(context: DictationContext, field: FocusedField?), Never>? {
-        guard settings.useContext else { return nil }
         let app = FocusReader.frontmostApp()
         // Hushtype's own windows aren't a dictation target worth describing.
         guard app.bundleID != Bundle.main.bundleIdentifier else { return nil }
+        let includeText = settings.useContext
         return Task.detached(priority: .userInitiated) {
-            FocusReader.capture(appName: app.name, bundleID: app.bundleID, pid: app.pid, includeText: true)
+            FocusReader.capture(appName: app.name, bundleID: app.bundleID, pid: app.pid, includeText: includeText)
         }
+    }
+
+    private func switchToCommand() {
+        guard phase == .recording, !isCommand else { return }
+        isCommand = true
+        if settings.soundsEnabled { Chime.playStart() }
     }
 
     private func finishRecording() {
@@ -211,18 +221,57 @@ final class DictationController: ObservableObject {
         }
 
         phase = .transcribing
+        if isCommand { return runCommand(session, capture: capture, releasedAt: releasedAt) }
         let cleaner = settings.makeCleaner()
         let vocabulary = settings.vocabulary
+        let useContext = settings.useContext
         // The controller lives for the whole app session, so capturing it strongly is fine.
         pipelineTask = Task {
             do {
                 let transcript = try await session.finish()
                 let transcribedAt = Date()
-                let context = await capture?.value.context
+                let context = useContext ? await capture?.value.context : nil
                 let pipeline = DictationPipeline(cleaner: cleaner, vocabulary: vocabulary, context: context)
                 let result = try await pipeline.polish(transcript, releasedAt: releasedAt,
                                                        transcribedAt: transcribedAt) {
                     Task { @MainActor in self.phase = .cleaning }
+                }
+                deliver(result)
+            } catch HushtypeError.noSpeech {
+                reset()
+            } catch {
+                show(error: error.localizedDescription)
+            }
+        }
+    }
+
+    /// Command mode: the speech is an instruction for the selected text, or for new text at the
+    /// cursor when nothing is selected. The result replaces the selection.
+    private func runCommand(_ session: AppleSpeechTranscriber,
+                            capture: Task<(context: DictationContext, field: FocusedField?), Never>?,
+                            releasedAt: Date) {
+        guard let assistant = settings.makeAssistant() else {
+            session.cancel()
+            return show(error: "Add your Anthropic key in Settings to use commands.")
+        }
+        let vocabulary = settings.vocabulary
+        pipelineTask = Task {
+            do {
+                let instruction = try await session.finish()
+                let transcribedAt = Date()
+                var context = await capture?.value.context ?? DictationContext()
+                if !context.hasSelection, let copied = await TextInserter.copySelection() {
+                    // Apps that don't expose their selection to Accessibility still copy it.
+                    context.selectedText = copied
+                }
+                phase = .cleaning
+                let pipeline = DictationPipeline(cleaner: assistant, vocabulary: vocabulary, context: context)
+                var result = try await pipeline.command(instruction, selection: context.selectedText,
+                                                        releasedAt: releasedAt, transcribedAt: transcribedAt)
+                if !context.hasSelection {
+                    result = DictationResult(id: result.id, raw: result.raw, cleaned: context.fit(result.cleaned),
+                                             date: result.date, timings: result.timings, kind: .command,
+                                             appName: result.appName)
                 }
                 deliver(result)
             } catch HushtypeError.noSpeech {
@@ -248,6 +297,7 @@ final class DictationController: ObservableObject {
 
     private func reset() {
         phase = .idle
+        isCommand = false
         level = 0
         overlay.hide()
     }

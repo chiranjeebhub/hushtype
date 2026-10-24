@@ -3,12 +3,15 @@ import CoreGraphics
 
 /// Watches a modifier key system-wide with a listen-only CGEventTap, which is the only way to
 /// see the Fn key. Holding the key starts dictation; releasing it stops. Pressing any other key
-/// while holding cancels, so normal shortcuts like ⌥← still work.
+/// while holding cancels, so normal shortcuts like ⌥← still work. Adding Control while holding
+/// switches to command mode.
 final class HotkeyMonitor {
     var triggerKey: TriggerKey = .rightOption
     var onPress: () -> Void = {}
     var onRelease: () -> Void = {}
     var onCancel: () -> Void = {}
+    /// Control went down while the dictation key was held.
+    var onCommand: () -> Void = {}
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -62,6 +65,10 @@ final class HotkeyMonitor {
             }
         case .flagsChanged:
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            if isHeld, keyCode == 59 || keyCode == 62, event.flags.contains(.maskControl) { // kVK_(Right)Control
+                onCommand()
+                return
+            }
             guard keyCode == triggerKey.keyCode else { return }
             let down = event.flags.contains(triggerKey.flag)
             if down && !isHeld {

@@ -105,9 +105,12 @@ private struct GeneralPane: View {
             } header: {
                 Text("Dictation")
             } footer: {
-                Footnote(settings.triggerKey == .fn
-                         ? "Set System Settings › Keyboard › “Press 🌐 key to” to “Do Nothing” so macOS doesn't also react to Fn."
-                         : "Hold the key to talk and let go to insert. Press any other key while holding to cancel.")
+                VStack(alignment: .leading, spacing: 6) {
+                    Footnote(settings.triggerKey == .fn
+                             ? "Set System Settings › Keyboard › “Press 🌐 key to” to “Do Nothing” so macOS doesn't also react to Fn."
+                             : "Hold the key to talk and let go to insert. Press any other key while holding to cancel.")
+                    Footnote("Command mode: select some text, hold the key, press Control too, and say what to do with it, like “make this shorter” or “translate to Hindi”. With nothing selected, Claude writes what you ask for at the cursor.")
+                }
             }
 
             Section {
