@@ -291,11 +291,14 @@ private struct SettingsSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 9) {
+                // The app icon carries the system's transparent margin, so draw it larger to show a
+                // 24 pt tile as in the design.
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable()
-                    .frame(width: 24, height: 24)
-                    .shadow(color: Color.hushViolet.opacity(0.35), radius: 5, y: 2)
-                Text("Hushtype").font(.system(size: 15, weight: .semibold)).tracking(-0.2)
+                    .frame(width: 29, height: 29)
+                    .padding(-2.5)
+                    .shadow(color: Color.hushViolet.opacity(0.35), radius: 5, y: 3)
+                Text("Hushtype").font(.system(size: 15.5, weight: .semibold)).tracking(-0.15)
             }
             .padding(.horizontal, 6)
             searchField
@@ -339,8 +342,8 @@ private struct SettingsSidebar: View {
 
     private var searchField: some View {
         HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(.tertiary)
-            TextField("Search", text: $search)
+            Icon("search", size: 13).foregroundStyle(.tertiary)
+            TextField("", text: $search, prompt: Text("Search").foregroundStyle(.tertiary))
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
                 .onSubmit { if let first = results.first { selection = first } }
@@ -349,22 +352,21 @@ private struct SettingsSidebar: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.tertiary)
             } else {
-                Text("⌘F").font(.caption).foregroundStyle(.tertiary)
+                Text("⌘F").font(.system(size: 11)).foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.black.opacity(0.22)))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5))
     }
 
     private func row(_ pane: SettingsPane) -> some View {
         let selected = selection == pane
         return Button { selection = pane } label: {
             HStack(spacing: 10) {
-                Image(systemName: pane.symbol)
-                    .font(.system(size: 14))
+                Icon(pane.symbol, size: 17)
                     .foregroundStyle(selected ? Color.hushViolet : Color.secondary)
-                    .frame(width: 20)
                 Text(pane.title)
                 Spacer(minLength: 4)
                 badge(pane)
@@ -373,7 +375,9 @@ private struct SettingsSidebar: View {
             .padding(.vertical, 6)
             .background {
                 if selected {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.09))
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.primary.opacity(0.085))
+                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
                 }
             }
             .contentShape(Rectangle())
@@ -528,9 +532,9 @@ private struct HomePane: View {
                             .controlSize(.small)
                     }
                     if let microphone = AVCaptureDevice.default(for: .audio)?.localizedName {
-                        pill { Image(systemName: "mic") } label: { Text(microphone) }
+                        pill { Icon("mic", size: 12) } label: { Text(microphone) }
                     }
-                    pill { Image(systemName: "sparkles") } label: { Text(settings.cleanupEnabled ? "Polish on" : "Polish off") }
+                    pill { Icon("sparkles", size: 12) } label: { Text(settings.cleanupEnabled ? "Polish on" : "Polish off") }
                 }
                 .padding(.top, 4)
             }
@@ -543,7 +547,7 @@ private struct HomePane: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
     }
 
-    private func pill<Icon: View, Content: View>(@ViewBuilder icon: () -> Icon, @ViewBuilder label: () -> Content) -> some View {
+    private func pill<Leading: View, Content: View>(@ViewBuilder icon: () -> Leading, @ViewBuilder label: () -> Content) -> some View {
         HStack(spacing: 6) {
             icon().font(.system(size: 10))
             label()
@@ -781,7 +785,7 @@ private struct ClaudePane: View {
 
     private func trust(_ symbol: String, _ title: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: symbol).font(.system(size: 15)).foregroundStyle(Color.hushViolet)
+            Icon(symbol, size: 17).foregroundStyle(Color.hushViolet)
             Text(title).font(.callout.weight(.medium))
             Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }

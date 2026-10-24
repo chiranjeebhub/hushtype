@@ -153,8 +153,7 @@ struct Glyph: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
-        Image(systemName: symbol)
-            .font(.system(size: 13, weight: .medium))
+        Icon(symbol, size: 15)
             .foregroundStyle(brand ? Color.hushMint : Color.primary)
             .frame(width: 28, height: 28)
             .background {
@@ -220,7 +219,7 @@ struct InfoButton: View {
 
     var body: some View {
         Button { shown.toggle() } label: {
-            Image(systemName: "info.circle").font(.system(size: 13))
+            Icon("info", size: 15)
         }
         .buttonStyle(.plain)
         .foregroundStyle(.tertiary)
@@ -246,7 +245,7 @@ struct Callout<Action: View>: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: symbol).foregroundStyle(tint).font(.system(size: 15))
+            Icon(symbol, size: 17).foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.callout.weight(.semibold))
                 Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
