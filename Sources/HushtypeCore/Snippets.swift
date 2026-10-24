@@ -49,3 +49,22 @@ public enum SnippetExpander {
             .joined(separator: " ")
     }
 }
+
+/// Combines snippet lists from two Macs when iCloud sync is turned on.
+public enum SnippetSync {
+    /// The local snippets, with remote edits of the same snippet taking their place and remote
+    /// snippets it lacks added. Snippets match by id, or by trigger phrase when the same one was
+    /// created separately on two Macs.
+    public static func merge(_ local: [Snippet], _ remote: [Snippet]) -> [Snippet] {
+        var result = local
+        for snippet in remote {
+            if let index = result.firstIndex(where: { $0.id == snippet.id }) {
+                result[index] = snippet
+            } else if !snippet.trigger.isEmpty,
+                      !result.contains(where: { $0.trigger.caseInsensitiveCompare(snippet.trigger) == .orderedSame }) {
+                result.append(snippet)
+            }
+        }
+        return result
+    }
+}

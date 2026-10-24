@@ -273,7 +273,7 @@ private struct SettingsRoot: View {
         case .snippets: SnippetsPane(settings: settings)
         case .history: HistoryPane(settings: settings, controller: controller)
         case .permissions: PermissionsPane(controller: controller, permissions: permissions)
-        case .general: GeneralPane(updater: updater, runSetup: runSetup)
+        case .general: GeneralPane(settings: settings, updater: updater, runSetup: runSetup)
         }
     }
 }
@@ -757,7 +757,9 @@ private struct ClaudePane: View {
                         Glyph(symbol: "key")
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Anthropic API key").fontWeight(.medium)
-                            Text("Saved in your Keychain. Command mode uses it too.")
+                            Text(settings.iCloudSync && settings.syncAPIKey
+                                 ? "Saved in iCloud Keychain. Command mode uses it too."
+                                 : "Saved in your Keychain. Command mode uses it too.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -1320,9 +1322,11 @@ private struct PermissionsPane: View {
 // MARK: - General
 
 private struct GeneralPane: View {
+    @ObservedObject var settings: SettingsStore
     @ObservedObject var updater: Updater
     let runSetup: () -> Void
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
+    @State private var keySyncError: String?
 
     var body: some View {
         SettingsPage(pane: .general) {
@@ -1333,6 +1337,26 @@ private struct GeneralPane: View {
                     Button("Run Setup Again…", action: runSetup)
                 }
             }
+            SectionLabel("iCloud")
+            SettingsCard {
+                ToggleRow(title: "Sync with iCloud",
+                          subtitle: "Your dictionary, snippets and style settings follow you to your other Macs. The dictation key, microphone and history stay on this Mac.",
+                          symbol: "icloud", isOn: $settings.iCloudSync)
+                SettingsRow(title: "Include Anthropic API key",
+                            subtitle: keySyncError ?? "Kept in iCloud Keychain, end-to-end encrypted, so you only paste it once.",
+                            symbol: "key.icloud") {
+                    Toggle("Include Anthropic API key", isOn: Binding(
+                        get: { settings.syncAPIKey },
+                        set: { on in
+                            keySyncError = settings.setKeySyncing(on) ? nil : "iCloud Keychain isn't available to this build of Hushtype yet."
+                        }))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .disabled(!settings.iCloudSync)
+                }
+                .opacity(settings.iCloudSync ? 1 : 0.5)
+            }
+
             SectionLabel("Updates")
             SettingsCard {
                 if updater.isAvailable {

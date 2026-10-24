@@ -278,3 +278,19 @@ final class HotkeyGestureTests: XCTestCase {
         XCTAssertEqual(gesture.keyUp(at: 0.1), .cancel)
     }
 }
+
+final class SnippetSyncTests: XCTestCase {
+    func testMergeKeepsBothSidesAndTakesRemoteEdits() {
+        let shared = Snippet(trigger: "my address", expansion: "old")
+        var edited = shared
+        edited.expansion = "new"
+        let localOnly = Snippet(trigger: "my calendar link", expansion: "cal")
+        let remoteOnly = Snippet(trigger: "standup template", expansion: "Yesterday:")
+        let duplicate = Snippet(trigger: "My Calendar Link", expansion: "other")
+
+        let merged = SnippetSync.merge([shared, localOnly], [edited, remoteOnly, duplicate])
+
+        XCTAssertEqual(merged.map(\.trigger), ["my address", "my calendar link", "standup template"])
+        XCTAssertEqual(merged.first?.expansion, "new")
+    }
+}

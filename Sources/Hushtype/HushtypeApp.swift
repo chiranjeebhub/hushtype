@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @main
@@ -8,10 +9,13 @@ struct HushtypeApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuContent(controller: appDelegate.controller,
+                        permissions: appDelegate.permissions,
                         openSettings: appDelegate.showSettings,
                         openSetup: appDelegate.showOnboarding,
                         openHistory: appDelegate.showHistory,
                         updater: appDelegate.updater)
+                // Menus drop item icons unless asked to show them.
+                .labelStyle(.titleAndIcon)
         } label: {
             MenuBarIcon(controller: appDelegate.controller)
         }
@@ -23,6 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let settings = SettingsStore()
     let updater = Updater()
     lazy var controller = DictationController(settings: settings)
+    /// Live permission state for the menu, so "Finish Setting Up" disappears once everything is
+    /// granted instead of reflecting whatever was true when the menu last redrew.
+    let permissions = PermissionMonitor()
+    private var permissionWatch: AnyCancellable?
+    private lazy var cloudSync = CloudSync(settings: settings, controller: controller)
     private lazy var onboardingWindow = OnboardingWindowController(settings: settings, controller: controller)
     private lazy var settingsWindow = SettingsWindowController(settings: settings, controller: controller,
                                                                 updater: updater) { [weak self] in
@@ -30,7 +39,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = cloudSync
         controller.start()
+        permissions.start(every: 2)
+        // Once Input Monitoring is granted, try the dictation key again without waiting for Settings.
+        permissionWatch = permissions.$granted.sink { [weak self] granted in
+            MainActor.assumeIsolated {
+                guard let self, granted.contains(.inputMonitoring), !self.controller.hotkeyActive else { return }
+                self.controller.restartHotkey()
+            }
+        }
         // `open Hushtype.app --args -HushtypeOpenSettings Claude` jumps straight to a Settings tab.
         if let tab = UserDefaults.standard.string(forKey: "HushtypeOpenSettings") {
             settingsWindow.show(tab: tab)
@@ -62,6 +80,7 @@ private struct MenuBarIcon: View {
 
 private struct MenuContent: View {
     @ObservedObject var controller: DictationController
+    @ObservedObject var permissions: PermissionMonitor
     let openSettings: @MainActor () -> Void
     let openSetup: @MainActor () -> Void
     let openHistory: @MainActor () -> Void
@@ -69,8 +88,11 @@ private struct MenuContent: View {
 
     var body: some View {
         Text(controller.statusLine)
-        if !controller.hotkeyActive || !Permissions.allGranted {
-            Button("Finish Setting Up Hushtype…") { openSetup() }
+        if permissions.granted.count < Permission.allCases.count {
+            Button("Finish Setting Up Hushtype…", systemImage: "checklist") { openSetup() }
+        } else if !controller.hotkeyActive {
+            // Everything is granted, but macOS only applies Input Monitoring to a fresh process.
+            Button("Restart to Turn On the Dictation Key", systemImage: "arrow.clockwise") { Permissions.relaunch() }
         }
 
         if let last = controller.history.first {
@@ -79,25 +101,25 @@ private struct MenuContent: View {
 
         if !controller.history.isEmpty {
             Divider()
-            Button("Paste Last Dictation") { controller.pasteLast(delay: 0.2) }
+            Button("Paste Last Dictation", systemImage: "doc.on.clipboard") { controller.pasteLast(delay: 0.2) }
                 .keyboardShortcut("v", modifiers: [.control, .command])
-            Menu("Recent") {
+            Menu("Recent", systemImage: "clock.arrow.circlepath") {
                 Text("Click to copy")
                 ForEach(controller.history.prefix(10)) { item in
                     Button(item.text.truncated(to: 60)) { controller.copyToClipboard(item.text) }
                 }
                 Divider()
-                Button("Show All…") { openHistory() }
+                Button("Show All…", systemImage: "list.bullet") { openHistory() }
             }
         }
 
         Divider()
-        Button("Settings…") { openSettings() }
+        Button("Settings…", systemImage: "gearshape") { openSettings() }
             .keyboardShortcut(",")
         if updater.isAvailable {
-            Button("Check for Updates…") { updater.checkForUpdates() }
+            Button("Check for Updates…", systemImage: "arrow.down.circle") { updater.checkForUpdates() }
         }
-        Button("Quit Hushtype") { NSApp.terminate(nil) }
+        Button("Quit Hushtype", systemImage: "power") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 }
