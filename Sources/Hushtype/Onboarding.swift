@@ -343,7 +343,7 @@ struct OnboardingView: View {
         case .recording: Label("Listening…", systemImage: "waveform").foregroundStyle(.red)
         case .transcribing, .cleaning: Label("Writing…", systemImage: "ellipsis")
         case .error(let message): Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-        case .idle:
+        case .idle, .notice:
             if dictated {
                 Label("It works.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             } else {
