@@ -31,6 +31,30 @@ public struct TranscriptCleaner: Sendable {
     Reply with only the cleaned text: no preamble, quotes, tags, or commentary.
     """
 
+    /// Words that signal fillers or a spoken self-correction worth sending to Claude.
+    static let polishCues: Set<String> = ["um", "umm", "uh", "uhm", "er", "erm", "ah", "hmm", "like", "no",
+                                          "wait", "actually", "sorry", "rather", "mean", "meant", "scratch"]
+
+    /// Short phrases without fillers or corrections already come back clean from the on-device
+    /// transcriber, so skipping Claude for them saves a network round trip.
+    public static func needsPolish(_ transcript: String) -> Bool {
+        let words = transcript.lowercased()
+            .split(whereSeparator: { !$0.isLetter && $0 != "'" })
+        if words.count > 8 { return true }
+        if words.contains(where: { polishCues.contains(String($0)) }) { return true }
+        // Repeated words ("the the") are a stumble.
+        return zip(words, words.dropFirst()).contains { $0 == $1 }
+    }
+
+    /// Opens the TLS connection to the API ahead of time so the real request skips the handshake.
+    public func prewarm() {
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 5
+        let session = session
+        Task.detached { _ = try? await session.data(for: request) }
+    }
+
     /// Returns the cleaned text, or the original transcript when Claude declines or returns nothing.
     public func clean(_ transcript: String, vocabulary: [String]) async throws -> String {
         guard !apiKey.isEmpty else { throw HushtypeError.missingAPIKey("Anthropic") }

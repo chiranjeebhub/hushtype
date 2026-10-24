@@ -1,76 +1,6 @@
 import XCTest
 @testable import HushtypeCore
 
-final class WAVEncoderTests: XCTestCase {
-    func testHeaderDescribes16kMonoPCM() {
-        let wav = WAVEncoder.encode(samples: [0, 1, -1, Int16.max], sampleRate: 16_000)
-        XCTAssertEqual(wav.count, 44 + 8)
-        XCTAssertEqual(String(decoding: wav[0..<4], as: UTF8.self), "RIFF")
-        XCTAssertEqual(String(decoding: wav[8..<12], as: UTF8.self), "WAVE")
-        XCTAssertEqual(wav.uint32(at: 4), 36 + 8)
-        XCTAssertEqual(wav.uint16(at: 22), 1)          // channels
-        XCTAssertEqual(wav.uint32(at: 24), 16_000)     // sample rate
-        XCTAssertEqual(wav.uint32(at: 28), 32_000)     // byte rate
-        XCTAssertEqual(wav.uint32(at: 40), 8)          // data size
-        XCTAssertEqual(wav.uint16(at: 50), UInt16(Int16.max))
-    }
-
-    func testFloatConversionClips() {
-        XCTAssertEqual(WAVEncoder.pcm16(from: [0, 1, -1, 2, -2]), [0, Int16.max, -Int16.max, Int16.max, -Int16.max])
-    }
-}
-
-final class TranscriberRequestTests: XCTestCase {
-    let options = TranscriptionOptions(language: "en", vocabulary: ["Hushtype", "Kubernetes"])
-
-    func testGroqRequestIsMultipartWithPrompt() throws {
-        let request = GroqTranscriber(apiKey: "gsk_test").makeRequest(wav: Data([1, 2, 3]), options: options)
-        XCTAssertEqual(request.url?.absoluteString, "https://api.groq.com/openai/v1/audio/transcriptions")
-        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer gsk_test")
-        XCTAssertTrue(request.value(forHTTPHeaderField: "Content-Type")!.hasPrefix("multipart/form-data; boundary="))
-        let body = String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self)
-        XCTAssertTrue(body.contains("name=\"model\"\r\n\r\nwhisper-large-v3-turbo"))
-        XCTAssertTrue(body.contains("name=\"language\"\r\n\r\nen"))
-        XCTAssertTrue(body.contains("name=\"prompt\"\r\n\r\nHushtype, Kubernetes"))
-        XCTAssertTrue(body.contains("filename=\"audio.wav\""))
-    }
-
-    func testGroqParsesText() throws {
-        XCTAssertEqual(try GroqTranscriber.parse(Data(#"{"text":" Hello world. "}"#.utf8)), "Hello world.")
-        XCTAssertThrowsError(try GroqTranscriber.parse(Data("nope".utf8)))
-    }
-
-    func testDeepgramRequestCarriesKeyterms() {
-        let request = DeepgramTranscriber(apiKey: "dg").makeRequest(wav: Data([1]), options: options)
-        let url = request.url!.absoluteString
-        XCTAssertTrue(url.hasPrefix("https://api.deepgram.com/v1/listen?"))
-        XCTAssertTrue(url.contains("model=nova-3"))
-        XCTAssertTrue(url.contains("keyterm=Hushtype"))
-        XCTAssertTrue(url.contains("keyterm=Kubernetes"))
-        XCTAssertTrue(url.contains("language=en"))
-        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Token dg")
-        XCTAssertEqual(request.httpBody, Data([1]))
-    }
-
-    func testDeepgramAutoDetectsLanguageWhenUnset() {
-        let request = DeepgramTranscriber(apiKey: "dg")
-            .makeRequest(wav: Data(), options: TranscriptionOptions(language: nil))
-        XCTAssertTrue(request.url!.absoluteString.contains("detect_language=true"))
-    }
-
-    func testDeepgramParsesTranscript() throws {
-        let json = #"{"results":{"channels":[{"alternatives":[{"transcript":"Ship it on Friday."}]}]}}"#
-        XCTAssertEqual(try DeepgramTranscriber.parse(Data(json.utf8)), "Ship it on Friday.")
-    }
-
-    func testLocalWhisperArgumentsAndParsing() {
-        let engine = LocalWhisperTranscriber(executablePath: "/bin/whisper-cli", modelPath: "/m.bin")
-        XCTAssertEqual(engine.arguments(audioPath: "/a.wav", options: TranscriptionOptions(language: nil)),
-                       ["-m", "/m.bin", "-f", "/a.wav", "-nt", "-np", "-l", "auto"])
-        XCTAssertEqual(LocalWhisperTranscriber.parse("\n Hello there.\n  How are you?\n"), "Hello there. How are you?")
-    }
-}
-
 final class TranscriptCleanerTests: XCTestCase {
     func testRequestShape() throws {
         let request = try TranscriptCleaner(apiKey: "sk-ant-test")
@@ -100,42 +30,41 @@ final class TranscriptCleanerTests: XCTestCase {
 }
 
 final class DictationPipelineTests: XCTestCase {
-    struct FakeTranscriber: Transcriber {
-        let name = "fake"
-        let text: String
-        func transcribe(wav: Data, options: TranscriptionOptions) async throws -> String { text }
-    }
-
-    func testRawTranscriptPassesThroughWithoutCleaner() async throws {
-        let pipeline = DictationPipeline(transcriber: FakeTranscriber(text: "hello"), cleaner: nil, options: .init())
-        let result = try await pipeline.run(wav: Data())
+    func testTranscriptPassesThroughWithoutCleaner() async throws {
+        let pipeline = DictationPipeline(cleaner: nil, vocabulary: [])
+        let result = try await pipeline.polish("  hello  ", releasedAt: Date())
         XCTAssertEqual(result.text, "hello")
         XCTAssertEqual(result.raw, "hello")
     }
 
     func testEmptyTranscriptThrowsNoSpeech() async {
-        let pipeline = DictationPipeline(transcriber: FakeTranscriber(text: ""), cleaner: nil, options: .init())
+        let pipeline = DictationPipeline(cleaner: nil, vocabulary: [])
         do {
-            _ = try await pipeline.run(wav: Data())
+            _ = try await pipeline.polish(" ", releasedAt: Date())
             XCTFail("expected noSpeech")
         } catch {
             XCTAssertEqual(error as? HushtypeError, .noSpeech)
         }
     }
 
+    func testShortCleanPhraseSkipsClaude() async throws {
+        // An empty key would throw if Claude were called; the raw text coming back proves it wasn't.
+        let pipeline = DictationPipeline(cleaner: TranscriptCleaner(apiKey: ""), vocabulary: [])
+        let result = try await pipeline.polish("Sounds good, see you then.", releasedAt: Date())
+        XCTAssertEqual(result.text, "Sounds good, see you then.")
+    }
+
+    func testNeedsPolish() {
+        XCTAssertFalse(TranscriptCleaner.needsPolish("Sounds good, see you then."))
+        XCTAssertTrue(TranscriptCleaner.needsPolish("Um, can you send it over?"))
+        XCTAssertTrue(TranscriptCleaner.needsPolish("Meet at 5, no, 6."))
+        XCTAssertTrue(TranscriptCleaner.needsPolish("I think the the build is broken."))
+        XCTAssertTrue(TranscriptCleaner.needsPolish("This is a longer sentence that has more than eight words in it."))
+    }
+
     func testVocabularySplitsLinesAndCommas() {
         XCTAssertEqual(DictationPipeline.vocabulary(from: "Hushtype\n  Chiranjeeb , Kubernetes\n\n"),
                        ["Hushtype", "Chiranjeeb", "Kubernetes"])
-    }
-}
-
-private extension Data {
-    func uint16(at offset: Int) -> UInt16 {
-        UInt16(self[offset]) | UInt16(self[offset + 1]) << 8
-    }
-
-    func uint32(at offset: Int) -> UInt32 {
-        (0..<4).reduce(UInt32(0)) { $0 | UInt32(self[offset + $1]) << (8 * UInt32($1)) }
     }
 }
 

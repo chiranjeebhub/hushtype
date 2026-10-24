@@ -4,7 +4,7 @@ public enum HushtypeError: LocalizedError, Equatable {
     case missingAPIKey(String)
     case http(service: String, status: Int, body: String)
     case badResponse(String)
-    case localEngine(String)
+    case speechUnavailable(String)
     case noSpeech
 
     public var errorDescription: String? {
@@ -15,8 +15,8 @@ public enum HushtypeError: LocalizedError, Equatable {
             return "\(service) returned HTTP \(status): \(body.prefix(200))"
         case .badResponse(let detail):
             return "Unexpected response: \(detail)"
-        case .localEngine(let detail):
-            return "Local Whisper failed: \(detail)"
+        case .speechUnavailable(let detail):
+            return detail
         case .noSpeech:
             return "No speech detected."
         }
