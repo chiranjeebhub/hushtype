@@ -226,6 +226,7 @@ final class DictationController: ObservableObject {
         let cleaner = settings.makeCleaner()
         let vocabulary = settings.vocabulary
         let useContext = settings.useContext
+        let snippets = settings.snippets
         // The controller lives for the whole app session, so capturing it strongly is fine.
         pipelineTask = Task {
             do {
@@ -233,7 +234,8 @@ final class DictationController: ObservableObject {
                 let transcribedAt = Date()
                 let captured = await capture?.value
                 let context = useContext ? captured?.context : nil
-                let pipeline = DictationPipeline(cleaner: cleaner, vocabulary: vocabulary, context: context)
+                let pipeline = DictationPipeline(cleaner: cleaner, vocabulary: vocabulary, context: context,
+                                                 snippets: snippets)
                 let result = try await pipeline.polish(transcript, releasedAt: releasedAt,
                                                        transcribedAt: transcribedAt) {
                     Task { @MainActor in self.phase = .cleaning }

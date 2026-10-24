@@ -194,3 +194,31 @@ final class CorrectionLearnerTests: XCTestCase {
         XCTAssertEqual(found.map(\.to), ["Hushtype"])
     }
 }
+
+final class SnippetTests: XCTestCase {
+    let snippets = [
+        Snippet(trigger: "my calendar link", expansion: "https://cal.com/chiranjeeb/30min"),
+        Snippet(trigger: "my address", expansion: "1 Infinite Loop\nCupertino"),
+        Snippet(trigger: "my work address", expansion: "2 Market St"),
+    ]
+
+    func testWholeMatch() {
+        XCTAssertEqual(SnippetExpander.wholeMatch("My calendar link.", in: snippets), "https://cal.com/chiranjeeb/30min")
+        XCTAssertEqual(SnippetExpander.wholeMatch("Insert my address", in: snippets), "1 Infinite Loop\nCupertino")
+        XCTAssertNil(SnippetExpander.wholeMatch("Send my calendar link", in: snippets))
+    }
+
+    func testExpandInsideSentence() {
+        XCTAssertEqual(SnippetExpander.expand("Book a slot here: my calendar link.", with: snippets),
+                       "Book a slot here: https://cal.com/chiranjeeb/30min.")
+        XCTAssertEqual(SnippetExpander.expand("Ship it to my work address, please.", with: snippets),
+                       "Ship it to 2 Market St, please.")
+        XCTAssertEqual(SnippetExpander.expand("Nothing to see.", with: snippets), "Nothing to see.")
+    }
+
+    func testPipelineUsesSnippetWithoutClaude() async throws {
+        let pipeline = DictationPipeline(cleaner: TranscriptCleaner(apiKey: ""), vocabulary: [], snippets: snippets)
+        let result = try await pipeline.polish("My calendar link", releasedAt: Date())
+        XCTAssertEqual(result.text, "https://cal.com/chiranjeeb/30min")
+    }
+}

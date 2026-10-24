@@ -59,11 +59,14 @@ public struct DictationPipeline: Sendable {
     let cleaner: TranscriptCleaner?
     let vocabulary: [String]
     let context: DictationContext?
+    let snippets: [Snippet]
 
-    public init(cleaner: TranscriptCleaner?, vocabulary: [String], context: DictationContext? = nil) {
+    public init(cleaner: TranscriptCleaner?, vocabulary: [String], context: DictationContext? = nil,
+                snippets: [Snippet] = []) {
         self.cleaner = cleaner
         self.vocabulary = vocabulary
         self.context = context
+        self.snippets = snippets
     }
 
     /// - Parameters:
@@ -75,6 +78,14 @@ public struct DictationPipeline: Sendable {
         let raw = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { throw HushtypeError.noSpeech }
 
+        // Saying just a snippet's trigger types its text exactly, with no polishing.
+        if let expansion = SnippetExpander.wholeMatch(raw, in: snippets) {
+            let timings = DictationTimings(transcribe: transcribedAt.timeIntervalSince(start),
+                                           total: Date().timeIntervalSince(start))
+            return DictationResult(raw: raw, cleaned: context?.fit(expansion) ?? expansion, timings: timings,
+                                   appName: context?.appName)
+        }
+
         var cleaned = raw
         var firstToken: TimeInterval?
         var polishTime: TimeInterval?
@@ -83,7 +94,8 @@ public struct DictationPipeline: Sendable {
             onCleanupStart()
             // A failed or slow cleanup should never lose the dictation; fall back to the raw transcript.
             do {
-                if let output = try await cleaner.clean(raw, vocabulary: vocabulary, context: context) {
+                if let output = try await cleaner.clean(raw, vocabulary: vocabulary, context: context,
+                                                        keepVerbatim: snippets.map(\.trigger)) {
                     cleaned = output.text
                     firstToken = output.firstToken
                     polishTime = output.total
@@ -96,6 +108,7 @@ public struct DictationPipeline: Sendable {
                 fallbackReason = error.localizedDescription
             }
         }
+        cleaned = SnippetExpander.expand(cleaned, with: snippets)
         if let context { cleaned = context.fit(cleaned) }
 
         let timings = DictationTimings(transcribe: transcribedAt.timeIntervalSince(start),

@@ -33,6 +33,10 @@ final class SettingsStore: ObservableObject {
     @Published var useContext: Bool { didSet { defaults.set(useContext, forKey: "useContext") } }
     /// Add a word to the dictionary when the user respells it after Hushtype typed it.
     @Published var learnFromCorrections: Bool { didSet { defaults.set(learnFromCorrections, forKey: "learnFromCorrections") } }
+    /// Spoken shortcuts that expand to saved text.
+    @Published var snippets: [Snippet] {
+        didSet { defaults.set(try? JSONEncoder().encode(snippets), forKey: "snippets") }
+    }
     @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
     /// Where setup resumes after Hushtype relaunches itself mid-onboarding.
     @Published var onboardingStep: Int { didSet { defaults.set(onboardingStep, forKey: "onboardingStep") } }
@@ -46,6 +50,7 @@ final class SettingsStore: ObservableObject {
         alwaysReadyMic = defaults.bool(forKey: "alwaysReadyMic")
         useContext = defaults.object(forKey: "useContext") as? Bool ?? true
         learnFromCorrections = defaults.object(forKey: "learnFromCorrections") as? Bool ?? true
+        snippets = (defaults.data(forKey: "snippets")).flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         onboardingStep = defaults.integer(forKey: "onboardingStep")
     }

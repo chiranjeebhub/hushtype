@@ -41,6 +41,7 @@ final class SettingsWindowController {
                                      GeneralPane(settings: settings, controller: controller, runSetup: runSetup)))
             tabs.addTabViewItem(item("Claude", "sparkles", ClaudePane(settings: settings, controller: controller)))
             tabs.addTabViewItem(item("Dictionary", "character.book.closed", DictionaryPane(settings: settings)))
+            tabs.addTabViewItem(item("Snippets", "text.badge.plus", SnippetsPane(settings: settings)))
             tabs.addTabViewItem(item("Permissions", "lock.shield", PermissionsPane(controller: controller)))
 
             let window = NSWindow(contentViewController: tabs)
@@ -239,6 +240,80 @@ private struct DictionaryPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+// MARK: - Snippets
+
+private struct SnippetsPane: View {
+    @ObservedObject var settings: SettingsStore
+    @State private var selection: Snippet.ID?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Say a trigger phrase and Hushtype types the saved text instead, exactly as written. Works on its own (“my calendar link”) or inside a sentence (“book a time at my calendar link”).")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(alignment: .top, spacing: 12) {
+                VStack(spacing: 0) {
+                    List(selection: $selection) {
+                        ForEach(settings.snippets) { snippet in
+                            Text(snippet.trigger.isEmpty ? "New snippet" : snippet.trigger)
+                                .foregroundStyle(snippet.trigger.isEmpty ? .secondary : .primary)
+                                .lineLimit(1)
+                                .tag(snippet.id)
+                        }
+                    }
+                    .listStyle(.bordered(alternatesRowBackgrounds: false))
+                    HStack(spacing: 0) {
+                        Button { add() } label: { Image(systemName: "plus").frame(width: 24, height: 20) }
+                        Button { remove() } label: { Image(systemName: "minus").frame(width: 24, height: 20) }
+                            .disabled(selection == nil)
+                        Spacer()
+                    }
+                    .buttonStyle(.borderless)
+                    .padding(.top, 4)
+                }
+                .frame(width: 170)
+
+                if let index = settings.snippets.firstIndex(where: { $0.id == selection }) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("When I say").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        TextField("my calendar link", text: $settings.snippets[index].trigger)
+                            .textFieldStyle(.roundedBorder)
+                        Text("Type").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        TextEditor(text: $settings.snippets[index].expansion)
+                            .font(.body)
+                            .scrollContentBackground(.hidden)
+                            .padding(6)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04)))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.12)))
+                    }
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: "text.badge.plus").font(.largeTitle).foregroundStyle(.tertiary)
+                        Text(settings.snippets.isEmpty ? "Add your first snippet with +." : "Select a snippet to edit it.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
+        .padding(20)
+    }
+
+    private func add() {
+        let snippet = Snippet(trigger: "", expansion: "")
+        settings.snippets.append(snippet)
+        selection = snippet.id
+    }
+
+    private func remove() {
+        guard let selection else { return }
+        settings.snippets.removeAll { $0.id == selection }
+        self.selection = nil
     }
 }
 
