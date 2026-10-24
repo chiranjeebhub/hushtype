@@ -39,6 +39,8 @@ final class SettingsStore: ObservableObject {
     }
     /// Save recent dictations on disk so they're there after a restart.
     @Published var keepHistory: Bool { didSet { defaults.set(keepHistory, forKey: "keepHistory") } }
+    /// Double-tap the dictation key to keep listening without holding it.
+    @Published var handsFree: Bool { didSet { defaults.set(handsFree, forKey: "handsFree") } }
     @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
     /// Where setup resumes after Hushtype relaunches itself mid-onboarding.
     @Published var onboardingStep: Int { didSet { defaults.set(onboardingStep, forKey: "onboardingStep") } }
@@ -54,6 +56,7 @@ final class SettingsStore: ObservableObject {
         learnFromCorrections = defaults.object(forKey: "learnFromCorrections") as? Bool ?? true
         snippets = (defaults.data(forKey: "snippets")).flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
         keepHistory = defaults.object(forKey: "keepHistory") as? Bool ?? true
+        handsFree = defaults.object(forKey: "handsFree") as? Bool ?? true
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         onboardingStep = defaults.integer(forKey: "onboardingStep")
     }

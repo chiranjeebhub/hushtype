@@ -36,6 +36,8 @@ final class DictationController: ObservableObject {
     @Published private(set) var hotkeyActive = false
     /// The current recording is a spoken command for the selected text, not dictation.
     @Published private(set) var isCommand = false
+    /// A double-tap is keeping the mic open without the key held.
+    @Published private(set) var isHandsFree = false
 
     private let settings: SettingsStore
     private let hotkey = HotkeyMonitor()
@@ -59,6 +61,7 @@ final class DictationController: ObservableObject {
         hotkey.onRelease = { [weak self] in Task { @MainActor in self?.finishRecording() } }
         hotkey.onCancel = { [weak self] in Task { @MainActor in self?.cancelRecording() } }
         hotkey.onCommand = { [weak self] in Task { @MainActor in self?.switchToCommand() } }
+        hotkey.onLock = { [weak self] in Task { @MainActor in self?.lockHandsFree() } }
         recorder.onLevel = { [weak self] value in Task { @MainActor in self?.level = value } }
         observeSleepAndLock()
         if settings.keepHistory { history = HistoryStore.load() }
@@ -71,7 +74,9 @@ final class DictationController: ObservableObject {
         if !hotkeyActive { return "Finish setup to turn on the dictation key" }
         switch phase {
         case .idle: return "Hold \(settings.triggerKey.displayName) to dictate"
-        case .recording: return isCommand ? "Listening for a command…" : "Listening…"
+        case .recording:
+            if isHandsFree { return "Listening hands-free. Tap \(settings.triggerKey.displayName) to finish." }
+            return isCommand ? "Listening for a command…" : "Listening…"
         case .transcribing: return "Transcribing…"
         case .cleaning: return "Polishing…"
         case .error(let message), .notice(let message): return message
@@ -81,6 +86,7 @@ final class DictationController: ObservableObject {
     /// Starts the hotkey listener. Safe to call again after permissions or the trigger key change.
     func start() {
         hotkey.triggerKey = settings.triggerKey
+        hotkey.handsFreeEnabled = settings.handsFree
         hotkeyActive = hotkey.start()
         prepareSpeechModel()
         applyMicMode()
@@ -196,11 +202,18 @@ final class DictationController: ObservableObject {
             if settings.soundsEnabled { Chime.playStart() }
         } catch {
             session.cancel()
+            hotkey.reset()
             show(error: error.localizedDescription)
         }
     }
 
+    private func lockHandsFree() {
+        guard phase == .recording else { return }
+        isHandsFree = true
+    }
+
     private func cancelRecording() {
+        hotkey.reset()
         guard phase == .recording else { return }
         _ = recorder.stop()
         scheduleCoolDown()
@@ -398,6 +411,7 @@ final class DictationController: ObservableObject {
     private func reset() {
         phase = .idle
         isCommand = false
+        isHandsFree = false
         level = 0
         overlay.hide()
     }

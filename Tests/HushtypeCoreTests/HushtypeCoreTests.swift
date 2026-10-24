@@ -222,3 +222,59 @@ final class SnippetTests: XCTestCase {
         XCTAssertEqual(result.text, "https://cal.com/chiranjeeb/30min")
     }
 }
+
+final class HotkeyGestureTests: XCTestCase {
+    func testHoldToTalk() {
+        var gesture = HotkeyGesture()
+        XCTAssertEqual(gesture.keyDown(at: 0), .start)
+        XCTAssertEqual(gesture.keyDown(at: 0.1), .none)
+        XCTAssertEqual(gesture.keyUp(at: 2), .finish)
+        XCTAssertFalse(gesture.isActive)
+    }
+
+    func testSingleTapIsCancelledAfterWindow() {
+        var gesture = HotkeyGesture()
+        XCTAssertEqual(gesture.keyDown(at: 0), .start)
+        XCTAssertEqual(gesture.keyUp(at: 0.1), .waitForSecondTap(HotkeyGesture.doubleTapWindow))
+        XCTAssertEqual(gesture.timeout(at: 0.45), .cancel)
+        XCTAssertFalse(gesture.isActive)
+    }
+
+    func testDoubleTapLocksUntilNextTap() {
+        var gesture = HotkeyGesture()
+        _ = gesture.keyDown(at: 0)
+        _ = gesture.keyUp(at: 0.1)
+        XCTAssertEqual(gesture.keyDown(at: 0.3), .lock)
+        XCTAssertEqual(gesture.keyUp(at: 0.4), .none)
+        XCTAssertEqual(gesture.timeout(at: 0.5), .none)
+        XCTAssertTrue(gesture.isLocked)
+        XCTAssertEqual(gesture.otherKey(isEscape: false), .none)
+        XCTAssertEqual(gesture.keyDown(at: 9), .finish)
+        XCTAssertEqual(gesture.keyUp(at: 9.1), .none)
+        XCTAssertFalse(gesture.isActive)
+        XCTAssertEqual(gesture.keyDown(at: 12), .start)
+    }
+
+    func testEscapeCancelsHandsFree() {
+        var gesture = HotkeyGesture()
+        _ = gesture.keyDown(at: 0)
+        _ = gesture.keyUp(at: 0.1)
+        _ = gesture.keyDown(at: 0.2)
+        _ = gesture.keyUp(at: 0.3)
+        XCTAssertEqual(gesture.otherKey(isEscape: true), .cancel)
+        XCTAssertFalse(gesture.isActive)
+    }
+
+    func testOtherKeyWhileHoldingCancels() {
+        var gesture = HotkeyGesture()
+        _ = gesture.keyDown(at: 0)
+        XCTAssertEqual(gesture.otherKey(isEscape: false), .cancel)
+        XCTAssertEqual(gesture.keyUp(at: 1), .none)
+    }
+
+    func testHandsFreeOff() {
+        var gesture = HotkeyGesture(handsFreeEnabled: false)
+        _ = gesture.keyDown(at: 0)
+        XCTAssertEqual(gesture.keyUp(at: 0.1), .cancel)
+    }
+}

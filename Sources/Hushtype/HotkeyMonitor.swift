@@ -1,21 +1,27 @@
 import AppKit
 import CoreGraphics
+import HushtypeCore
 
 /// Watches a modifier key system-wide with a listen-only CGEventTap, which is the only way to
-/// see the Fn key. Holding the key starts dictation; releasing it stops. Pressing any other key
-/// while holding cancels, so normal shortcuts like ⌥← still work. Adding Control while holding
-/// switches to command mode.
+/// see the Fn key. `HotkeyGesture` turns its presses into actions: hold to talk, double-tap for
+/// hands-free. Pressing any other key while holding cancels, so normal shortcuts like ⌥← still
+/// work. Adding Control while recording switches to command mode.
 final class HotkeyMonitor {
     var triggerKey: TriggerKey = .rightOption
+    var handsFreeEnabled = true {
+        didSet { gesture.handsFreeEnabled = handsFreeEnabled }
+    }
     var onPress: () -> Void = {}
     var onRelease: () -> Void = {}
     var onCancel: () -> Void = {}
-    /// Control went down while the dictation key was held.
+    /// A double-tap turned the recording hands-free.
+    var onLock: () -> Void = {}
+    /// Control went down while recording.
     var onCommand: () -> Void = {}
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var isHeld = false
+    private var gesture = HotkeyGesture()
 
     /// Returns false when Input Monitoring has not been granted yet.
     @discardableResult
@@ -49,37 +55,49 @@ final class HotkeyMonitor {
         if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
         tap = nil
         runLoopSource = nil
-        isHeld = false
+        gesture.reset()
     }
 
     var isRunning: Bool { tap != nil }
+
+    /// Tells the gesture that the dictation ended on its own (an error, the Mac going to sleep).
+    func reset() {
+        gesture.reset()
+    }
 
     private func handle(type: CGEventType, event: CGEvent) {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
         case .keyDown:
-            if isHeld {
-                isHeld = false
-                onCancel()
-            }
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            perform(gesture.otherKey(isEscape: keyCode == 53)) // kVK_Escape
         case .flagsChanged:
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            if isHeld, keyCode == 59 || keyCode == 62, event.flags.contains(.maskControl) { // kVK_(Right)Control
+            if gesture.isActive, keyCode == 59 || keyCode == 62, event.flags.contains(.maskControl) { // kVK_(Right)Control
                 onCommand()
                 return
             }
             guard keyCode == triggerKey.keyCode else { return }
-            let down = event.flags.contains(triggerKey.flag)
-            if down && !isHeld {
-                isHeld = true
-                onPress()
-            } else if !down && isHeld {
-                isHeld = false
-                onRelease()
-            }
+            let now = ProcessInfo.processInfo.systemUptime
+            perform(event.flags.contains(triggerKey.flag) ? gesture.keyDown(at: now) : gesture.keyUp(at: now))
         default:
             break
+        }
+    }
+
+    private func perform(_ action: HotkeyGesture.Action) {
+        switch action {
+        case .none: break
+        case .start: onPress()
+        case .finish: onRelease()
+        case .cancel: onCancel()
+        case .lock: onLock()
+        case .waitForSecondTap(let seconds):
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+                guard let self else { return }
+                self.perform(self.gesture.timeout(at: ProcessInfo.processInfo.systemUptime))
+            }
         }
     }
 }

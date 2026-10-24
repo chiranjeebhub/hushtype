@@ -100,6 +100,8 @@ private struct GeneralPane: View {
                     ForEach(TriggerKey.allCases) { Text($0.displayName).tag($0) }
                 }
                 .onChange(of: settings.triggerKey) { controller.restartHotkey() }
+                Toggle("Double-tap for hands-free dictation", isOn: $settings.handsFree)
+                    .onChange(of: settings.handsFree) { controller.restartHotkey() }
                 Picker("Language", selection: $settings.language) {
                     ForEach(languages) { Text($0.name).tag($0.id) }
                 }
@@ -112,6 +114,9 @@ private struct GeneralPane: View {
                     Footnote(settings.triggerKey == .fn
                              ? "Set System Settings › Keyboard › “Press 🌐 key to” to “Do Nothing” so macOS doesn't also react to Fn."
                              : "Hold the key to talk and let go to insert. Press any other key while holding to cancel.")
+                    if settings.handsFree {
+                        Footnote("Hands-free: double-tap the key and talk as long as you like. Tap it again to insert, or press Esc to cancel.")
+                    }
                     Footnote("Command mode: select some text, hold the key, press Control too, and say what to do with it, like “make this shorter” or “translate to Hindi”. With nothing selected, Claude writes what you ask for at the cursor.")
                 }
             }

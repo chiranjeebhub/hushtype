@@ -48,6 +48,10 @@ private struct OverlayView: View {
                     Label("Command", systemImage: "wand.and.stars").labelStyle(.titleAndIcon)
                 }
                 LevelBars(level: controller.level)
+                if controller.isHandsFree {
+                    Image(systemName: "lock.fill").foregroundStyle(.white.opacity(0.8))
+                    Text("Tap to finish · Esc to cancel").foregroundStyle(.white.opacity(0.8))
+                }
             case .transcribing, .cleaning:
                 ProgressView().controlSize(.small)
                 Text(controller.isCommand ? "Working on it…"
