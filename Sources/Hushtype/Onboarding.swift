@@ -91,7 +91,11 @@ struct OnboardingView: View {
             Task { modelStatus = await AppleSpeechModel.status(language: settings.transcriptionOptions.language) }
         }
         .onDisappear { permissions.stop() }
-        .onChange(of: permissions.granted) { permissionsChanged() }
+        .onChange(of: permissions.granted) { old, new in
+            // Come back from System Settings as soon as the switch is flipped there.
+            if !new.isSubset(of: old) { Permissions.bringWindowsForward() }
+            permissionsChanged()
+        }
         .onChange(of: step) {
             // Don't let a text box on the new step grab focus by itself; the user clicks in when ready.
             DispatchQueue.main.async { NSApp.keyWindow?.makeFirstResponder(nil) }

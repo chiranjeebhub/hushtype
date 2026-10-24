@@ -59,7 +59,11 @@ enum Permission: String, CaseIterable, Identifiable {
         case .microphone:
             switch AVCaptureDevice.authorizationStatus(for: .audio) {
             case .notDetermined:
-                AVCaptureDevice.requestAccess(for: .audio) { _ in }
+                AVCaptureDevice.requestAccess(for: .audio) { _ in
+                    // The prompt belongs to a system process, and a menu-bar app isn't made active again
+                    // when it closes, so bring Hushtype's window back ourselves.
+                    DispatchQueue.main.async { Permissions.bringWindowsForward() }
+                }
             case .authorized:
                 break
             default:
@@ -103,6 +107,16 @@ enum Permission: String, CaseIterable, Identifiable {
 
 enum Permissions {
     static var allGranted: Bool { Permission.allCases.allSatisfy(\.isGranted) }
+
+    /// Makes Hushtype active and brings its open windows to the front. As a menu-bar app it has no Dock
+    /// icon, so after a permission prompt or a trip to System Settings its window would stay buried.
+    @MainActor
+    static func bringWindowsForward() {
+        NSApp.activate(ignoringOtherApps: true)
+        for window in NSApp.windows where window.isVisible && window.styleMask.contains(.titled) {
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
 
     /// Quits and reopens Hushtype. macOS only applies a new Input Monitoring grant to a fresh process.
     static func relaunch() {
