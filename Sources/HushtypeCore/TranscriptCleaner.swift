@@ -4,6 +4,7 @@ import Foundation
 /// and applies spoken self-corrections.
 public struct TranscriptCleaner: Sendable {
     public static let defaultModel = "claude-haiku-5-5"
+    static let apiVersion = "2026-10-21"
 
     let apiKey: String
     let model: String
@@ -57,7 +58,7 @@ public struct TranscriptCleaner: Sendable {
         request.httpMethod = "POST"
         request.timeoutInterval = 20
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2026-10-21", forHTTPHeaderField: "anthropic-version")
+        request.setValue(Self.apiVersion, forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request

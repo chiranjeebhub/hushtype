@@ -32,8 +32,10 @@ open dist/Hushtype.app
 You can also open `Package.swift` in Xcode to edit and debug, but permissions such as the microphone need the
 bundled app from the script, since a bare executable has no `Info.plist`.
 
-On first launch the Setup tab asks for **Microphone**, **Input Monitoring** and **Accessibility**. Then add a Groq
-or Deepgram key (and an Anthropic key for cleanup) under Engines, hold Right Option, and talk.
+On first launch a short guided setup walks through **Microphone**, **Input Monitoring** and **Accessibility** (each
+step notices the grant by itself and moves on, and restarts Hushtype for you when macOS requires it), checks your
+Groq/Deepgram and Anthropic keys as you paste them, and ends with a practice field to try your first dictation.
+Run it again any time from Settings › General.
 
 macOS ties Accessibility and Input Monitoring grants to the code signature, and the default ad-hoc signature changes
 with every build. To keep grants across rebuilds, create a self-signed code-signing certificate in Keychain Access

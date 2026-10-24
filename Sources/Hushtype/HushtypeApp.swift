@@ -7,7 +7,9 @@ struct HushtypeApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(controller: appDelegate.controller, openSettings: appDelegate.showSettings)
+            MenuContent(controller: appDelegate.controller,
+                        openSettings: appDelegate.showSettings,
+                        openSetup: appDelegate.showOnboarding)
         } label: {
             MenuBarIcon(controller: appDelegate.controller)
         }
@@ -18,17 +20,27 @@ struct HushtypeApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let settings = SettingsStore()
     lazy var controller = DictationController(settings: settings)
-    private lazy var settingsWindow = SettingsWindowController(settings: settings, controller: controller)
+    private lazy var onboardingWindow = OnboardingWindowController(settings: settings, controller: controller)
+    private lazy var settingsWindow = SettingsWindowController(settings: settings, controller: controller) { [weak self] in
+        self?.showOnboarding()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
-        if !Permissions.allGranted || !settings.hasCompletedOnboarding {
-            showSettings()
+        // `open Hushtype.app --args -HushtypeOpenSettings Claude` jumps straight to a Settings tab.
+        if let tab = UserDefaults.standard.string(forKey: "HushtypeOpenSettings") {
+            settingsWindow.show(tab: tab)
+        } else if !settings.hasCompletedOnboarding || !Permissions.allGranted {
+            showOnboarding()
         }
     }
 
     func showSettings() {
         settingsWindow.show()
+    }
+
+    func showOnboarding() {
+        onboardingWindow.show()
     }
 }
 
@@ -43,9 +55,13 @@ private struct MenuBarIcon: View {
 private struct MenuContent: View {
     @ObservedObject var controller: DictationController
     let openSettings: @MainActor () -> Void
+    let openSetup: @MainActor () -> Void
 
     var body: some View {
         Text(controller.statusLine)
+        if !controller.hotkeyActive || !Permissions.allGranted {
+            Button("Finish Setting Up Hushtype…") { openSetup() }
+        }
 
         if !controller.history.isEmpty {
             Divider()
