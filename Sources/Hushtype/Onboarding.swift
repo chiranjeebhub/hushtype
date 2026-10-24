@@ -87,6 +87,8 @@ struct OnboardingView: View {
             step = resumeStep()
             dictationsAtStart = controller.history.count
             permissions.start()
+            // Know the model's state up front so the sidebar ticks it even if that step is skipped over.
+            Task { modelStatus = await AppleSpeechModel.status(language: settings.transcriptionOptions.language) }
         }
         .onDisappear { permissions.stop() }
         .onChange(of: permissions.granted) { permissionsChanged() }
