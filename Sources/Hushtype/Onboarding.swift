@@ -3,14 +3,14 @@ import HushtypeCore
 import SwiftUI
 
 enum OnboardingStep: Int, CaseIterable {
-    case welcome, microphone, inputMonitoring, accessibility, engine, tryIt
+    case welcome, permissions, claude, tryIt
 
-    var permission: Permission? {
+    var title: String {
         switch self {
-        case .microphone: return .microphone
-        case .inputMonitoring: return .inputMonitoring
-        case .accessibility: return .accessibility
-        default: return nil
+        case .welcome: return "Welcome"
+        case .permissions: return "Permissions"
+        case .claude: return "Connect Claude"
+        case .tryIt: return "Try it"
         }
     }
 }
@@ -28,11 +28,11 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     func show() {
         if window == nil {
-            let host = NSHostingController(rootView: OnboardingView(settings: settings, controller: controller) { [weak self] in
+            let view = OnboardingView(settings: settings, controller: controller) { [weak self] in
                 self?.window?.close()
-            })
-            let window = NSWindow(contentViewController: host)
-            window.styleMask = [.titled, .closable, .fullSizeContentView]
+            }
+            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+            window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.isMovableByWindowBackground = true
@@ -57,314 +57,310 @@ struct OnboardingView: View {
 
     @StateObject private var permissions = PermissionMonitor()
     @State private var step: OnboardingStep = .welcome
-    @State private var needsRelaunch = false
+    @State private var practice = ""
+    @State private var dictationsAtStart = 0
+    @FocusState private var practiceFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            StepDots(current: step)
-                .padding(.top, 22)
-
-            Group {
-                switch step {
-                case .welcome: welcome
-                case .microphone, .inputMonitoring, .accessibility: permissionStep(step.permission!)
-                case .engine: engineStep
-                case .tryIt: TryItStep(settings: settings, controller: controller)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal, 48)
-            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)))
-            .id(step)
-
+        HStack(spacing: 0) {
+            sidebar
             Divider()
-            footer
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+            VStack(alignment: .leading, spacing: 0) {
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, 36)
+                    .padding(.top, 44)
+                    .id(step)
+                    .transition(.opacity.combined(with: .offset(x: 12)))
+                footer
+                    .padding(.horizontal, 36)
+                    .padding(.bottom, 24)
+            }
         }
-        .frame(width: 600, height: 500)
+        .frame(width: 780, height: 560)
         .onAppear {
             step = resumeStep()
+            dictationsAtStart = controller.history.count
             permissions.start()
         }
         .onDisappear { permissions.stop() }
         .onChange(of: permissions.granted) { permissionsChanged() }
     }
 
-    // MARK: - Steps
+    // MARK: Sidebar
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 30, height: 30)
+                Text("Hushtype").font(.title3.weight(.semibold))
+            }
+            .padding(.top, 52)
+            .padding(.bottom, 28)
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(OnboardingStep.allCases, id: \.rawValue) { item in
+                    sidebarRow(item)
+                }
+            }
+            Spacer()
+            Text("About a minute to set up.\nYou can change anything later in Settings.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 24)
+        }
+        .padding(.horizontal, 18)
+        .frame(width: 220)
+        .frame(maxHeight: .infinity)
+        .background(Color.primary.opacity(0.03))
+    }
+
+    private func sidebarRow(_ item: OnboardingStep) -> some View {
+        let isCurrent = item == step
+        let isDone = isComplete(item) && item.rawValue < step.rawValue
+        return HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(isDone ? Color.green : (isCurrent ? Color.accentColor : Color.primary.opacity(0.08)))
+                    .frame(width: 22, height: 22)
+                if isDone {
+                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                } else {
+                    Text("\(item.rawValue + 1)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isCurrent ? .white : .secondary)
+                }
+            }
+            Text(item.title)
+                .font(.callout.weight(isCurrent ? .semibold : .regular))
+                .foregroundStyle(isCurrent ? .primary : .secondary)
+            Spacer()
+        }
+        .padding(.vertical, 7)
+        .padding(.horizontal, 8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(isCurrent ? Color.accentColor.opacity(0.12) : .clear))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Jump back to any earlier step; forward only through Continue.
+            if item.rawValue < step.rawValue { go(to: item) }
+        }
+    }
+
+    // MARK: Content
+
+    @ViewBuilder private var content: some View {
+        switch step {
+        case .welcome: welcome
+        case .permissions: permissionsStep
+        case .claude: claudeStep
+        case .tryIt: tryItStep
+        }
+    }
+
+    private func header(_ title: String, _ subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(size: 26, weight: .bold))
+            Text(subtitle).font(.body).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.bottom, 22)
+    }
 
     private var welcome: some View {
-        VStack(spacing: 16) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 96, height: 96)
-            Text("Welcome to Hushtype").font(.largeTitle.bold())
-            Text("Hold a key, speak, let go. Polished text appears wherever you're typing.\nSetup takes about a minute.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            header("Talk instead of type", "Hold a key, speak naturally, and let go. Hushtype writes it out, cleaned up, in whatever app you're using.")
+            VStack(alignment: .leading, spacing: 14) {
+                feature("keyboard", .blue, "Works everywhere", "Slack, Mail, Notion, your code editor. Anywhere you can type.")
+                feature("sparkles", .pink, "Reads like you wrote it", "Filler words gone, punctuation fixed, corrections applied.")
+                feature("lock.fill", .teal, "Your keys, your data", "Speech is transcribed on this Mac. Only text goes to Claude, with your own key.")
+            }
         }
     }
 
-    private func permissionStep(_ permission: Permission) -> some View {
-        let granted = permissions.isGranted(permission)
-        return VStack(spacing: 18) {
-            ZStack {
-                Circle().fill(granted ? Color.green.opacity(0.15) : Color.accentColor.opacity(0.12))
-                    .frame(width: 88, height: 88)
-                Image(systemName: granted ? "checkmark" : permission.symbol)
-                    .font(.system(size: 36, weight: .semibold))
-                    .foregroundStyle(granted ? Color.green : Color.accentColor)
-                    .contentTransition(.symbolEffect(.replace))
+    private func feature(_ symbol: String, _ color: Color, _ title: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            IconTile(symbol: symbol, color: color, size: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body.weight(.semibold))
+                Text(text).font(.callout).foregroundStyle(.secondary)
             }
-            Text(granted ? "\(permission.title) allowed" : "Allow \(permission.title)")
-                .font(.title.bold())
-            Text(permission.purpose)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+        }
+    }
 
-            if permission == .inputMonitoring && needsRelaunch {
-                VStack(spacing: 10) {
-                    Text("Allowed. macOS needs Hushtype to restart before the key works. Setup picks up right where you left off.")
-                        .multilineTextAlignment(.center)
-                        .font(.callout)
-                    Button("Restart Hushtype") {
-                        settings.onboardingStep = OnboardingStep.accessibility.rawValue
-                        Permissions.relaunch()
+    private var nextPermission: Permission? {
+        Permission.allCases.first { !permissions.isGranted($0) }
+    }
+
+    private var inputMonitoringNeedsRestart: Bool {
+        permissions.isGranted(.inputMonitoring) && !controller.hotkeyActive
+    }
+
+    private var permissionsStep: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header("Give Hushtype access", "macOS asks for these once. Each one ticks itself off as soon as you allow it.")
+            Card {
+                VStack(spacing: 14) {
+                    ForEach(Permission.allCases) { permission in
+                        PermissionRow(permission: permission,
+                                      granted: permissions.isGranted(permission),
+                                      emphasized: permission == nextPermission,
+                                      needsRestart: permission == .inputMonitoring && inputMonitoringNeedsRestart)
+                        if permission != Permission.allCases.last { Divider() }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                }
-            } else if !granted {
-                Button("Allow \(permission.title)…") { permission.request() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                if let hint = permission.settingsHint {
-                    Text(hint)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    Button("Open System Settings") { permission.openSettingsPane() }
-                        .buttonStyle(.link)
                 }
             }
-        }
-        .animation(.easeOut(duration: 0.25), value: granted)
-    }
-
-    private var engineStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(spacing: 6) {
-                Text("Choose how Hushtype listens").font(.title.bold())
-                Text("Cloud engines are fastest. Local keeps your voice on this Mac.")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-
-            Picker("", selection: $settings.engine) {
-                Text("Groq").tag(TranscriptionEngine.groq)
-                Text("Deepgram").tag(TranscriptionEngine.deepgram)
-                Text("Local").tag(TranscriptionEngine.localWhisper)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            switch settings.engine {
-            case .groq:
-                APIKeyField(service: .groq, settings: settings, label: "Groq API key")
-            case .deepgram:
-                APIKeyField(service: .deepgram, settings: settings, label: "Deepgram API key")
-            case .localWhisper:
-                LocalWhisperStatus(settings: settings)
-            }
-
-            Divider()
-            Toggle("Polish text with Claude: remove filler words, fix punctuation, apply corrections",
-                   isOn: $settings.cleanupEnabled)
-            if settings.cleanupEnabled {
-                APIKeyField(service: .anthropic, settings: settings, label: "Anthropic API key")
+            if inputMonitoringNeedsRestart {
+                Text("Setup will pick up right here after the restart.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .padding(.top, 8)
             }
         }
     }
 
-    // MARK: - Footer and navigation
+    private var claudeStep: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header("Connect Claude", "Your speech is transcribed on this Mac, then Claude turns it into clean, punctuated text. One key is all it takes.")
+            PolishCard(settings: settings)
+        }
+    }
+
+    private var dictated: Bool { controller.history.count > dictationsAtStart }
+
+    private var tryItStep: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header(dictated ? "You're all set" : "Try your first dictation",
+                   dictated ? "Hushtype is ready in every app. It lives in your menu bar." : "Click into the box, then use your dictation key.")
+
+            HStack(spacing: 6) {
+                Text("Hold").foregroundStyle(.secondary)
+                Keycap(label: settings.triggerKey.displayName)
+                Text("and say “Hushtype makes typing feel effortless”, then let go.").foregroundStyle(.secondary)
+            }
+            .font(.callout)
+            .padding(.bottom, 12)
+
+            TextEditor(text: $practice)
+                .font(.title3)
+                .focused($practiceFocused)
+                .scrollContentBackground(.hidden)
+                .padding(12)
+                .frame(height: 130)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .textBackgroundColor)))
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(dictated ? Color.green : Color.primary.opacity(0.12), lineWidth: dictated ? 2 : 1))
+
+            HStack {
+                practiceStatus.font(.callout)
+                Spacer()
+                Picker("Key", selection: $settings.triggerKey) {
+                    ForEach(TriggerKey.allCases) { Text($0.displayName).tag($0) }
+                }
+                .fixedSize()
+                .onChange(of: settings.triggerKey) { controller.restartHotkey() }
+            }
+            .padding(.top, 10)
+        }
+        .onAppear { practiceFocused = true }
+    }
+
+    @ViewBuilder private var practiceStatus: some View {
+        switch controller.phase {
+        case .recording: Label("Listening…", systemImage: "waveform").foregroundStyle(.red)
+        case .transcribing, .cleaning: Label("Writing…", systemImage: "ellipsis")
+        case .error(let message): Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        case .idle:
+            if dictated {
+                Label("It works.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            } else {
+                Text("Waiting for your voice…").foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: Footer and navigation
 
     private var footer: some View {
         HStack {
             if step != .welcome {
                 Button("Back") { go(to: OnboardingStep(rawValue: step.rawValue - 1)!) }
-                    .keyboardShortcut(.cancelAction)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
-            if step == .engine && !settings.engineConfigured {
-                Button("Skip for now") { go(to: .tryIt) }
+            if let skip = skipTitle {
+                Button(skip) { skipCurrent() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, 12)
             }
             Button(primaryTitle) { advance() }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .disabled(!canAdvance)
+                .controlSize(.large)
+                .disabled(!isComplete(step))
         }
-        .controlSize(.large)
     }
 
     private var primaryTitle: String {
         switch step {
         case .welcome: return "Get Started"
-        case .tryIt: return "Finish"
+        case .tryIt: return dictated ? "Done" : "Finish"
         default: return "Continue"
         }
     }
 
-    private var canAdvance: Bool {
-        if let permission = step.permission { return permissions.isGranted(permission) && !needsRelaunch }
-        if step == .engine { return settings.engineConfigured }
-        return true
+    private var skipTitle: String? {
+        switch step {
+        case .claude where !isComplete(.claude): return "Skip, use raw transcripts"
+        default: return nil
+        }
+    }
+
+    private func isComplete(_ item: OnboardingStep) -> Bool {
+        switch item {
+        case .permissions: return Permissions.allGranted && controller.hotkeyActive
+        case .claude: return !settings.cleanupEnabled || !settings.apiKey(.anthropic).isEmpty
+        default: return true
+        }
+    }
+
+    private func skipCurrent() {
+        if step == .claude { settings.cleanupEnabled = false }
+        go(to: OnboardingStep(rawValue: step.rawValue + 1)!)
     }
 
     private func advance() {
-        if step == .tryIt {
+        guard step != .tryIt else {
             settings.hasCompletedOnboarding = true
             settings.onboardingStep = 0
             close()
             return
         }
-        go(to: nextIncomplete(after: step))
+        go(to: OnboardingStep(rawValue: step.rawValue + 1)!)
     }
 
     private func go(to target: OnboardingStep) {
-        withAnimation(.easeInOut(duration: 0.3)) { step = target }
+        withAnimation(.easeInOut(duration: 0.25)) { step = target }
         settings.onboardingStep = target.rawValue
     }
 
-    /// Skips permission steps that are already granted.
-    private func nextIncomplete(after current: OnboardingStep) -> OnboardingStep {
-        var next = OnboardingStep(rawValue: current.rawValue + 1) ?? .tryIt
-        while let permission = next.permission, permissions.isGranted(permission) {
-            next = OnboardingStep(rawValue: next.rawValue + 1)!
-        }
-        return next
-    }
-
     private func resumeStep() -> OnboardingStep {
-        let saved = OnboardingStep(rawValue: settings.onboardingStep) ?? .welcome
-        // Anything still missing comes first, so a revoked permission is never skipped.
-        if settings.hasCompletedOnboarding || saved != .welcome {
-            if let missing = OnboardingStep.allCases.first(where: { $0.permission.map { !permissions.isGranted($0) } ?? false }) {
-                return missing
-            }
-            return saved == .welcome ? .engine : saved
+        if !isComplete(.permissions) && (settings.hasCompletedOnboarding || settings.onboardingStep > 0) {
+            return .permissions
         }
-        return .welcome
+        return OnboardingStep(rawValue: settings.onboardingStep) ?? .welcome
     }
 
-    /// Moves on by itself once the permission on screen is granted.
     private func permissionsChanged() {
-        guard let permission = step.permission, permissions.isGranted(permission) else { return }
-        if permission == .inputMonitoring {
+        if permissions.isGranted(.inputMonitoring) && !controller.hotkeyActive {
             controller.restartHotkey()
-            if !controller.hotkeyActive {
-                needsRelaunch = true
-                return
-            }
+            // If the tap still can't start, the row offers a restart; resume here afterwards.
+            if !controller.hotkeyActive { settings.onboardingStep = OnboardingStep.permissions.rawValue }
         }
-        let current = step
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            if step == current { go(to: nextIncomplete(after: current)) }
-        }
-    }
-}
-
-private struct StepDots: View {
-    let current: OnboardingStep
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(OnboardingStep.allCases, id: \.rawValue) { step in
-                Capsule()
-                    .fill(step.rawValue <= current.rawValue ? Color.accentColor : Color.secondary.opacity(0.25))
-                    .frame(width: step == current ? 22 : 8, height: 8)
+        if step == .permissions && isComplete(.permissions) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                if step == .permissions && isComplete(.permissions) { go(to: .claude) }
             }
-        }
-        .animation(.easeInOut(duration: 0.25), value: current)
-    }
-}
-
-struct LocalWhisperStatus: View {
-    @ObservedObject var settings: SettingsStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(settings.localWhisperReady ? "whisper.cpp and the model are ready." : "whisper.cpp isn't set up yet.",
-                  systemImage: settings.localWhisperReady ? "checkmark.circle.fill" : "exclamationmark.circle")
-                .foregroundStyle(settings.localWhisperReady ? .green : .orange)
-            if !settings.localWhisperReady {
-                Text("Run `brew install whisper-cpp`, then download **ggml-large-v3-turbo-q5_0.bin** into ~/Library/Application Support/Hushtype/models. You can change both paths in Settings › Engines.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
-
-/// The last step: a practice field to dictate into, which celebrates the first successful dictation.
-private struct TryItStep: View {
-    @ObservedObject var settings: SettingsStore
-    @ObservedObject var controller: DictationController
-    @State private var practice = ""
-    @State private var baseline = 0
-    @FocusState private var focused: Bool
-
-    private var succeeded: Bool { controller.history.count > baseline }
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Text(succeeded ? "You're all set" : "Try it").font(.title.bold())
-            HStack(spacing: 6) {
-                Text("Hold")
-                Text(settings.triggerKey.displayName)
-                    .font(.body.weight(.semibold))
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(RoundedRectangle(cornerRadius: 5).strokeBorder(.secondary.opacity(0.5)))
-                Text("and say “Hushtype makes typing feel effortless”, then let go.")
-            }
-            .font(.callout)
-            .foregroundStyle(.secondary)
-
-            TextEditor(text: $practice)
-                .font(.title3)
-                .focused($focused)
-                .scrollContentBackground(.hidden)
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .textBackgroundColor)))
-                .overlay(RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(succeeded ? Color.green : Color.secondary.opacity(0.3), lineWidth: succeeded ? 2 : 1))
-                .frame(height: 120)
-
-            Group {
-                switch controller.phase {
-                case .recording: Label("Listening…", systemImage: "waveform").foregroundStyle(.red)
-                case .transcribing, .cleaning: Label("Working on it…", systemImage: "ellipsis")
-                case .error(let message): Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-                case .idle:
-                    if succeeded {
-                        Label("That's it. Use it in any app.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                    } else {
-                        Text(" ")
-                    }
-                }
-            }
-            .font(.callout)
-
-            Picker("Dictation key", selection: $settings.triggerKey) {
-                ForEach(TriggerKey.allCases) { Text($0.displayName).tag($0) }
-            }
-            .frame(maxWidth: 300)
-            .onChange(of: settings.triggerKey) { controller.restartHotkey() }
-        }
-        .onAppear {
-            baseline = controller.history.count
-            focused = true
         }
     }
 }

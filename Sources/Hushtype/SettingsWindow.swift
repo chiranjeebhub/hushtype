@@ -22,7 +22,7 @@ final class SettingsWindowController {
             tabs.tabStyle = .toolbar
             tabs.addTabViewItem(item("General", "gearshape",
                                      GeneralPane(settings: settings, controller: controller, runSetup: runSetup)))
-            tabs.addTabViewItem(item("Engines", "waveform", EnginesPane(settings: settings)))
+            tabs.addTabViewItem(item("Claude", "sparkles", ClaudePane(settings: settings)))
             tabs.addTabViewItem(item("Dictionary", "character.book.closed", DictionaryPane(settings: settings)))
             tabs.addTabViewItem(item("Permissions", "lock.shield", PermissionsPane(controller: controller)))
 
@@ -90,22 +90,6 @@ private struct GeneralPane: View {
                 }
             }
 
-            Section {
-                Toggle("Polish text with Claude", isOn: $settings.cleanupEnabled)
-            } header: {
-                Text("Polishing")
-            } footer: {
-                Group {
-                    if settings.cleanupEnabled && settings.apiKey(.anthropic).isEmpty {
-                        Text("Add an Anthropic key under Engines. Until then, raw transcripts are inserted.")
-                            .foregroundStyle(.orange)
-                    } else {
-                        Text("Removes filler words, fixes punctuation and applies spoken corrections.")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
             Section("System") {
                 Toggle("Open Hushtype at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { LaunchAtLogin.set(launchAtLogin) }
@@ -115,49 +99,25 @@ private struct GeneralPane: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 430)
+        .frame(height: 300)
     }
 }
 
-// MARK: - Engines
+// MARK: - Claude
 
-private struct EnginesPane: View {
+private struct ClaudePane: View {
     @ObservedObject var settings: SettingsStore
 
     var body: some View {
-        Form {
-            Section {
-                Picker("Engine", selection: $settings.engine) {
-                    ForEach(TranscriptionEngine.allCases) { Text($0.displayName).tag($0) }
-                }
-            } header: {
-                Text("Speech to text")
-            } footer: {
-                Text("Cloud engines send audio to the provider for transcription. Local whisper.cpp keeps it on this Mac.")
-                    .foregroundStyle(.secondary)
-            }
-
-            switch settings.engine {
-            case .groq:
-                Section("Groq") { APIKeyField(service: .groq, settings: settings, label: "API key") }
-            case .deepgram:
-                Section("Deepgram") { APIKeyField(service: .deepgram, settings: settings, label: "API key") }
-            case .localWhisper:
-                Section("whisper.cpp") {
-                    TextField("whisper-cli", text: $settings.whisperExecutablePath)
-                    TextField("Model", text: $settings.whisperModelPath)
-                    LocalWhisperStatus(settings: settings)
-                }
-            }
-
-            Section {
-                APIKeyField(service: .anthropic, settings: settings, label: "API key")
-            } header: {
-                Text("Anthropic (for polishing)")
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            PolishCard(settings: settings)
+            Text("Speech is transcribed on this Mac. Only the text is sent to Claude for polishing.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Spacer()
         }
-        .formStyle(.grouped)
-        .frame(height: 440)
+        .padding(20)
+        .frame(height: 360)
     }
 }
 
@@ -176,7 +136,7 @@ private struct DictionaryPane: View {
             } header: {
                 Text("Words to always get right")
             } footer: {
-                Text("One name, product or term per line. \(settings.vocabulary.count) terms. Used by the speech engine and when polishing.")
+                Text("One name, product or term per line. \(settings.vocabulary.count) terms. Used when transcribing and polishing.")
                     .foregroundStyle(.secondary)
             }
         }

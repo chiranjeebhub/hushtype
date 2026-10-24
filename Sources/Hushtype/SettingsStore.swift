@@ -74,20 +74,6 @@ final class SettingsStore: ObservableObject {
         }
     }
 
-    /// True when the selected speech engine has what it needs (a key, or local files).
-    var engineConfigured: Bool {
-        switch engine {
-        case .groq: return !apiKey(.groq).isEmpty
-        case .deepgram: return !apiKey(.deepgram).isEmpty
-        case .localWhisper: return localWhisperReady
-        }
-    }
-
-    var localWhisperReady: Bool {
-        FileManager.default.isExecutableFile(atPath: whisperExecutablePath)
-            && FileManager.default.fileExists(atPath: whisperModelPath)
-    }
-
     func makeCleaner() -> TranscriptCleaner? {
         let key = apiKey(.anthropic)
         guard cleanupEnabled, !key.isEmpty else { return nil }
