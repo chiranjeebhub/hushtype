@@ -20,12 +20,14 @@ final class SettingsWindowController {
 
     private let settings: SettingsStore
     private let controller: DictationController
+    private let updater: Updater
     private let runSetup: () -> Void
     private var window: NSWindow?
 
-    init(settings: SettingsStore, controller: DictationController, runSetup: @escaping () -> Void) {
+    init(settings: SettingsStore, controller: DictationController, updater: Updater, runSetup: @escaping () -> Void) {
         self.settings = settings
         self.controller = controller
+        self.updater = updater
         self.runSetup = runSetup
     }
 
@@ -38,7 +40,7 @@ final class SettingsWindowController {
             self.tabs = tabs
             tabs.tabStyle = .toolbar
             tabs.addTabViewItem(item("General", "gearshape",
-                                     GeneralPane(settings: settings, controller: controller, runSetup: runSetup)))
+                                     GeneralPane(settings: settings, controller: controller, updater: updater, runSetup: runSetup)))
             tabs.addTabViewItem(item("Claude", "sparkles", ClaudePane(settings: settings, controller: controller)))
             tabs.addTabViewItem(item("Dictionary", "character.book.closed", DictionaryPane(settings: settings)))
             tabs.addTabViewItem(item("Snippets", "text.badge.plus", SnippetsPane(settings: settings)))
@@ -77,6 +79,7 @@ final class SettingsWindowController {
 private struct GeneralPane: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var controller: DictationController
+    @ObservedObject var updater: Updater
     let runSetup: () -> Void
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
 
@@ -138,6 +141,21 @@ private struct GeneralPane: View {
                 LabeledContent("Setup") {
                     Button("Run Setup Again…", action: runSetup)
                 }
+            }
+
+            Section {
+                if updater.isAvailable {
+                    Toggle("Check for updates automatically", isOn: $updater.automaticallyChecks)
+                }
+                LabeledContent("Version \(Updater.version)") {
+                    if updater.isAvailable {
+                        Button("Check Now") { updater.checkForUpdates() }
+                    } else {
+                        Text("Development build").foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Updates")
             }
         }
         .formStyle(.grouped)

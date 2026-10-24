@@ -10,7 +10,8 @@ struct HushtypeApp: App {
             MenuContent(controller: appDelegate.controller,
                         openSettings: appDelegate.showSettings,
                         openSetup: appDelegate.showOnboarding,
-                        openHistory: appDelegate.showHistory)
+                        openHistory: appDelegate.showHistory,
+                        updater: appDelegate.updater)
         } label: {
             MenuBarIcon(controller: appDelegate.controller)
         }
@@ -20,9 +21,11 @@ struct HushtypeApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let settings = SettingsStore()
+    let updater = Updater()
     lazy var controller = DictationController(settings: settings)
     private lazy var onboardingWindow = OnboardingWindowController(settings: settings, controller: controller)
-    private lazy var settingsWindow = SettingsWindowController(settings: settings, controller: controller) { [weak self] in
+    private lazy var settingsWindow = SettingsWindowController(settings: settings, controller: controller,
+                                                                updater: updater) { [weak self] in
         self?.showOnboarding()
     }
 
@@ -62,6 +65,7 @@ private struct MenuContent: View {
     let openSettings: @MainActor () -> Void
     let openSetup: @MainActor () -> Void
     let openHistory: @MainActor () -> Void
+    let updater: Updater
 
     var body: some View {
         Text(controller.statusLine)
@@ -90,6 +94,9 @@ private struct MenuContent: View {
         Divider()
         Button("Settings…") { openSettings() }
             .keyboardShortcut(",")
+        if updater.isAvailable {
+            Button("Check for Updates…") { updater.checkForUpdates() }
+        }
         Button("Quit Hushtype") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }

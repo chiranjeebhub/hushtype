@@ -5,21 +5,29 @@
 Hold a key, speak, let go, and polished text appears in whatever app has focus. An open,
 privacy-first alternative to Wispr Flow, built as a native macOS app in Swift and SwiftUI.
 
-## What works today (MVP milestone 1)
+## What it does
 
 - **Push-to-talk** on Right Option (default), Right Command, or Fn/🌐, captured system-wide with a `CGEventTap`.
   Pressing any other key while holding cancels, so normal shortcuts keep working.
-- **Recording** from the default mic via `AVAudioEngine`, with a floating "listening" pill and live level meter.
+- **Hands-free**: double-tap the key and talk as long as you like; tap again to insert, Esc to cancel.
 - **Speech to text on this Mac** with Apple's `SpeechAnalyzer`. Audio is transcribed live while you hold the key,
   so the transcript is ready almost as soon as you let go. Free, private, and works offline once the
   voice model for your language has downloaded (setup does this for you).
-- **Cleanup** with Claude Haiku: removes fillers, fixes punctuation, applies self-corrections
-  ("at 5, no, 6 pm" becomes "at 6 pm"). Short phrases with no fillers or corrections skip Claude entirely, and
-  the connection is opened while you're still talking. If cleanup fails, the raw transcript is inserted instead.
-- **Insertion** by pasting into the focused app, then restoring your clipboard.
-- **Personal dictionary** fed to both the speech engine and Claude.
-- **Settings**: hotkey, language, your Anthropic key (stored in the Keychain), permissions setup.
-- Recent dictations in the menu bar (in memory for now), click to copy.
+- **Cleanup** with Claude Haiku, streamed: removes fillers, fixes punctuation, applies self-corrections
+  ("at 5, no, 6 pm" becomes "at 6 pm"). Short phrases with no fillers or corrections skip Claude entirely, the
+  connection is opened while you're still talking, and if Claude hasn't started answering within 2 seconds the
+  raw transcript is inserted instead.
+- **Context awareness**: the app you're in and the text around the cursor (read through Accessibility, never
+  from password fields) go to Claude, so it matches tone (casual in Slack, careful in Mail, literal in editors),
+  continues your sentence, and spells names already on screen. Those names also help the transcriber.
+- **Command mode**: select text, hold the key, press Control too, and say "make this shorter" or "translate to
+  Hindi". The result replaces the selection. With nothing selected, Claude writes what you ask for.
+- **Personal dictionary** fed to both the speech engine and Claude, and it **learns from your corrections**: fix
+  the spelling of a name right after dictating it and Hushtype remembers it.
+- **Snippets**: say "my calendar link" and the full text is typed.
+- **History** saved on your Mac, searchable in Settings, and **⌃⌘V** pastes the last dictation again.
+- **Speed readout**: Settings › Claude shows typical and 90th-percentile time from letting go to text.
+- **Auto-updates** with Sparkle in signed releases (see [RELEASING.md](RELEASING.md)).
 
 ## Build and run
 
@@ -50,12 +58,8 @@ Sources/Hushtype/       the menu bar app: hotkey, recorder, overlay, paste, sett
 Tests/                  HushtypeCore tests (swift test)
 Resources/Info.plist    app bundle metadata (LSUIElement, mic usage string)
 scripts/build-app.sh    builds, icons and signs dist/Hushtype.app
+scripts/release.sh      signed, notarized release with DMG and Sparkle appcast (RELEASING.md)
 ```
-
-## Next up
-
-History persisted in SQLite, context from the focused text field, per-app tone,
-snippets, signed and notarized releases. See the project plan for the full roadmap.
 
 ## License
 
