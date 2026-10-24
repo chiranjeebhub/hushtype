@@ -70,21 +70,16 @@ enum Permission: String, CaseIterable, Identifiable {
                 openSettingsPane()
             }
         case .inputMonitoring:
-            if promptedBefore {
-                openSettingsPane()
-            } else {
-                markPrompted()
-                if !CGRequestListenEventAccess() { openSettingsPane() }
-            }
+            // Always ask first: the request is what adds Hushtype to the Input Monitoring list. Skipping it
+            // because of an earlier install left the list empty after a reinstall or a permissions reset.
+            if !CGRequestListenEventAccess() { openSettingsPane() }
         case .accessibility:
-            if promptedBefore {
-                openSettingsPane()
-            } else {
-                markPrompted()
-                // Prompting also adds Hushtype to the Accessibility list, so the user only flips a switch.
-                let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-                _ = AXIsProcessTrustedWithOptions(options)
-            }
+            // Prompting also adds Hushtype to the Accessibility list, so the user only flips a switch.
+            let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+            let trusted = AXIsProcessTrustedWithOptions(options)
+            // macOS shows its own prompt only once per app, so after that go straight to the pane.
+            if !trusted && promptedBefore { openSettingsPane() }
+            markPrompted()
         }
     }
 
