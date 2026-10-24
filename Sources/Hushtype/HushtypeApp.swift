@@ -63,6 +63,10 @@ private struct MenuContent: View {
             Button("Finish Setting Up Hushtype…") { openSetup() }
         }
 
+        if let last = controller.history.first {
+            Text("Last one took \(last.duration.seconds)")
+        }
+
         if !controller.history.isEmpty {
             Divider()
             Text("Recent (click to copy)")
@@ -77,6 +81,11 @@ private struct MenuContent: View {
         Button("Quit Hushtype") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
+}
+
+extension TimeInterval {
+    /// "0.62 s"
+    var seconds: String { String(format: "%.2f s", self) }
 }
 
 extension String {

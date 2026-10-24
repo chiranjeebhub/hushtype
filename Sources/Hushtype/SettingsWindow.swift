@@ -39,7 +39,7 @@ final class SettingsWindowController {
             tabs.tabStyle = .toolbar
             tabs.addTabViewItem(item("General", "gearshape",
                                      GeneralPane(settings: settings, controller: controller, runSetup: runSetup)))
-            tabs.addTabViewItem(item("Claude", "sparkles", ClaudePane(settings: settings)))
+            tabs.addTabViewItem(item("Claude", "sparkles", ClaudePane(settings: settings, controller: controller)))
             tabs.addTabViewItem(item("Dictionary", "character.book.closed", DictionaryPane(settings: settings)))
             tabs.addTabViewItem(item("Permissions", "lock.shield", PermissionsPane(controller: controller)))
 
@@ -137,22 +137,31 @@ private struct GeneralPane: View {
 
 private struct ClaudePane: View {
     @ObservedObject var settings: SettingsStore
+    @ObservedObject var controller: DictationController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            PolishCard(settings: settings)
-            Card {
-                VStack(alignment: .leading, spacing: 12) {
-                    privacyRow("lock.laptopcomputer", .teal, "Speech stays on this Mac",
-                               "Your voice is transcribed on-device by macOS. Audio is never uploaded.")
-                    Divider()
-                    privacyRow("text.bubble", .pink, "Only text goes to Claude",
-                               "The transcript is sent with your own key for polishing, then inserted.")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                PolishCard(settings: settings)
+                Card {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle(isOn: $settings.useContext) {
+                            privacyRow("macwindow.and.cursorarrow", .indigo, "Match the app you're in",
+                                       "Sends the app's name and the text around your cursor with the transcript, so Claude matches the tone (casual in Slack, careful in Mail) and spells names already on screen. Password fields are never read.")
+                        }
+                        .toggleStyle(.switch)
+                        Divider()
+                        privacyRow("lock.laptopcomputer", .teal, "Speech stays on this Mac",
+                                   "Your voice is transcribed on-device by macOS. Audio is never uploaded.")
+                        Divider()
+                        privacyRow("text.bubble", .pink, "Only text goes to Claude",
+                                   "The transcript is sent with your own key for polishing, then inserted.")
+                    }
                 }
+                SpeedCard(controller: controller)
             }
-            Spacer(minLength: 0)
+            .padding(20)
         }
-        .padding(20)
     }
 
     private func privacyRow(_ symbol: String, _ color: Color, _ title: String, _ detail: String) -> some View {
@@ -163,6 +172,42 @@ private struct ClaudePane: View {
                 Text(detail).font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// Release-to-paste time over recent dictations, so slow polishing is visible.
+private struct SpeedCard: View {
+    @ObservedObject var controller: DictationController
+
+    var body: some View {
+        Card {
+            HStack(alignment: .top, spacing: 12) {
+                IconTile(symbol: "bolt.fill", color: .orange, size: 28)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Speed").font(.callout.weight(.semibold))
+                    if let stats = controller.latency, let last = controller.history.first(where: { $0.kind == .dictation }) {
+                        Text("Typically \(stats.median.seconds) from letting go to text, \(stats.p90.seconds) or less 9 times in 10 (last \(stats.count)).")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text(breakdown(last.timings))
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    } else {
+                        Text("Dictate a few times to see how fast text arrives.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func breakdown(_ t: DictationTimings) -> String {
+        var parts = ["Last: transcribe \(t.transcribe.seconds)"]
+        if let first = t.polishFirstToken, let polish = t.polish {
+            parts.append("Claude first word \(first.seconds), done \(polish.seconds)")
+        } else {
+            parts.append("Claude skipped")
+        }
+        parts.append("total \(t.total.seconds)")
+        return parts.joined(separator: " · ")
     }
 }
 

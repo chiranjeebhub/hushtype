@@ -29,6 +29,8 @@ final class SettingsStore: ObservableObject {
     @Published var soundsEnabled: Bool { didSet { defaults.set(soundsEnabled, forKey: "soundsEnabled") } }
     /// Keep the mic open all the time so dictation starts instantly and catches the first word.
     @Published var alwaysReadyMic: Bool { didSet { defaults.set(alwaysReadyMic, forKey: "alwaysReadyMic") } }
+    /// Send the app name and the text around the cursor to Claude, so it matches tone and spelling.
+    @Published var useContext: Bool { didSet { defaults.set(useContext, forKey: "useContext") } }
     @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
     /// Where setup resumes after Hushtype relaunches itself mid-onboarding.
     @Published var onboardingStep: Int { didSet { defaults.set(onboardingStep, forKey: "onboardingStep") } }
@@ -40,6 +42,7 @@ final class SettingsStore: ObservableObject {
         dictionaryText = defaults.string(forKey: "dictionary") ?? ""
         soundsEnabled = defaults.object(forKey: "soundsEnabled") as? Bool ?? true
         alwaysReadyMic = defaults.bool(forKey: "alwaysReadyMic")
+        useContext = defaults.object(forKey: "useContext") as? Bool ?? true
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         onboardingStep = defaults.integer(forKey: "onboardingStep")
     }

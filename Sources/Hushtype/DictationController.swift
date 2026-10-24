@@ -10,6 +10,8 @@ final class DictationController: ObservableObject {
         case transcribing
         case cleaning
         case error(String)
+        /// A short, non-blocking message after a dictation, like "Claude was slow".
+        case notice(String)
 
         var menuBarSymbol: String {
             switch self {
@@ -17,6 +19,7 @@ final class DictationController: ObservableObject {
             case .recording: return "mic.fill"
             case .transcribing, .cleaning: return "ellipsis.circle"
             case .error: return "exclamationmark.triangle"
+            case .notice: return "waveform"
             }
         }
     }
@@ -37,6 +40,8 @@ final class DictationController: ObservableObject {
     private lazy var overlay = OverlayPanel(controller: self)
     private var pipelineTask: Task<Void, Never>?
     private var transcription: AppleSpeechTranscriber?
+    /// The app and text around the cursor, read in the background when the key goes down.
+    private var focusCapture: Task<(context: DictationContext, field: FocusedField?), Never>?
     private var errorDismissTask: Task<Void, Never>?
     private var coolDownTask: Task<Void, Never>?
     /// True while the Mac is asleep or the screen is locked; the mic is always closed then.
@@ -59,7 +64,7 @@ final class DictationController: ObservableObject {
         case .recording: return "Listening…"
         case .transcribing: return "Transcribing…"
         case .cleaning: return "Polishing…"
-        case .error(let message): return message
+        case .error(let message), .notice(let message): return message
         }
     }
 
@@ -147,13 +152,17 @@ final class DictationController: ObservableObject {
     // MARK: - Pipeline
 
     private func beginRecording() {
-        guard phase == .idle || isError else { return }
+        guard phase == .idle || isError || isNotice else { return }
         errorDismissTask?.cancel()
         coolDownTask?.cancel()
-        let session = AppleSpeechTranscriber(options: settings.transcriptionOptions)
+        let capture = captureFocus()
+        let session = AppleSpeechTranscriber(options: settings.transcriptionOptions) {
+            await capture?.value.context.nearbyTerms ?? []
+        }
         do {
             try recorder.start(onBuffer: session.append)
             transcription = session
+            focusCapture = capture
             settings.makeCleaner()?.prewarm()
             phase = .recording
             overlay.show()
@@ -170,7 +179,19 @@ final class DictationController: ObservableObject {
         scheduleCoolDown()
         transcription?.cancel()
         transcription = nil
+        focusCapture = nil
         reset()
+    }
+
+    /// Starts reading the frontmost app and the text around its cursor, when context is on.
+    private func captureFocus() -> Task<(context: DictationContext, field: FocusedField?), Never>? {
+        guard settings.useContext else { return nil }
+        let app = FocusReader.frontmostApp()
+        // Hushtype's own windows aren't a dictation target worth describing.
+        guard app.bundleID != Bundle.main.bundleIdentifier else { return nil }
+        return Task.detached(priority: .userInitiated) {
+            FocusReader.capture(appName: app.name, bundleID: app.bundleID, pid: app.pid, includeText: true)
+        }
     }
 
     private func finishRecording() {
@@ -181,6 +202,8 @@ final class DictationController: ObservableObject {
         if settings.soundsEnabled { Chime.playStop() }
         guard let session = transcription else { return reset() }
         transcription = nil
+        let capture = focusCapture
+        focusCapture = nil
         guard seconds >= Self.minimumRecordingSeconds else {
             session.cancel()
             reset()
@@ -188,12 +211,17 @@ final class DictationController: ObservableObject {
         }
 
         phase = .transcribing
-        let pipeline = DictationPipeline(cleaner: settings.makeCleaner(), vocabulary: settings.vocabulary)
+        let cleaner = settings.makeCleaner()
+        let vocabulary = settings.vocabulary
         // The controller lives for the whole app session, so capturing it strongly is fine.
         pipelineTask = Task {
             do {
                 let transcript = try await session.finish()
-                let result = try await pipeline.polish(transcript, releasedAt: releasedAt) {
+                let transcribedAt = Date()
+                let context = await capture?.value.context
+                let pipeline = DictationPipeline(cleaner: cleaner, vocabulary: vocabulary, context: context)
+                let result = try await pipeline.polish(transcript, releasedAt: releasedAt,
+                                                       transcribedAt: transcribedAt) {
                     Task { @MainActor in self.phase = .cleaning }
                 }
                 deliver(result)
@@ -207,9 +235,15 @@ final class DictationController: ObservableObject {
 
     private func deliver(_ result: DictationResult) {
         history.insert(result, at: 0)
-        if history.count > 20 { history.removeLast() }
+        if history.count > 50 { history.removeLast() }
         reset()
         TextInserter.insert(result.text)
+        if let reason = result.fallbackReason { show(notice: reason) }
+    }
+
+    /// Release-to-paste percentiles over recent dictations.
+    var latency: LatencyStats? {
+        LatencyStats(history.filter { $0.kind == .dictation }.map(\.duration))
     }
 
     private func reset() {
@@ -221,6 +255,21 @@ final class DictationController: ObservableObject {
     private var isError: Bool {
         if case .error = phase { return true }
         return false
+    }
+
+    private var isNotice: Bool {
+        if case .notice = phase { return true }
+        return false
+    }
+
+    private func show(notice message: String) {
+        phase = .notice(message)
+        overlay.show()
+        errorDismissTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled, let self, self.isNotice else { return }
+            self.reset()
+        }
     }
 
     private func show(error message: String) {
