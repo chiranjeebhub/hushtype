@@ -1,6 +1,6 @@
 # Releasing Hushtype
 
-Pushing a tag like `v0.2.0` runs `.github/workflows/release.yml`, which builds Hushtype, signs it with your
+Running `.github/workflows/release.yml` by hand (Actions › Release › Run workflow) builds Hushtype, signs it with your
 Developer ID, notarizes it with Apple, and publishes a GitHub release with:
 
 - `Hushtype-<version>.dmg` for people downloading it,
@@ -41,12 +41,10 @@ Keep the Sparkle private key safe: every future update must be signed with it, o
 
 ## Cutting a release
 
-```sh
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-The version comes from the tag and the build number from the workflow run.
+Releases are usually made from your Mac (below), which also embeds the iCloud provisioning profile. Pushing a tag
+no longer starts the workflow, so a release made on the Mac doesn't trigger a duplicate run. To release from GitHub
+instead, open Actions › Release › Run workflow and enter the version, e.g. `0.3.3`; the build number comes from the
+workflow run.
 
 ## Releasing from your Mac instead
 
@@ -55,6 +53,7 @@ xcrun notarytool store-credentials hushtype   # once; asks for the API key or an
 HUSHTYPE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
 HUSHTYPE_NOTARY_PROFILE=hushtype \
 HUSHTYPE_SPARKLE_PUBLIC_KEY="<public key>" \
+HUSHTYPE_PROVISIONING_PROFILE=path/to/Hushtype_DeveloperID.provisionprofile \
 scripts/release.sh 0.2.0
 ```
 
