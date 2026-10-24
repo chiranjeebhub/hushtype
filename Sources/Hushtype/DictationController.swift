@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import HushtypeCore
 
 /// Runs one dictation at a time: hold key → record and transcribe live → polish → paste.
@@ -49,6 +50,8 @@ final class DictationController: ObservableObject {
     /// True while the Mac is asleep or the screen is locked; the mic is always closed then.
     private var micSuspended = false
     private var systemObservers: [NSObjectProtocol] = []
+    /// ⌃⌘V pastes the last dictation again, for when a paste missed.
+    private var pasteLastShortcut: GlobalShortcut?
 
     init(settings: SettingsStore) {
         self.settings = settings
@@ -58,6 +61,10 @@ final class DictationController: ObservableObject {
         hotkey.onCommand = { [weak self] in Task { @MainActor in self?.switchToCommand() } }
         recorder.onLevel = { [weak self] value in Task { @MainActor in self?.level = value } }
         observeSleepAndLock()
+        if settings.keepHistory { history = HistoryStore.load() }
+        pasteLastShortcut = GlobalShortcut(keyCode: kVK_ANSI_V, modifiers: controlKey | cmdKey) { [weak self] in
+            Task { @MainActor in self?.pasteLast() }
+        }
     }
 
     var statusLine: String {
@@ -145,6 +152,22 @@ final class DictationController: ObservableObject {
     func restartHotkey() {
         hotkey.stop()
         start()
+    }
+
+    /// Types the most recent dictation again at the cursor.
+    func pasteLast(delay: Double = 0) {
+        guard let last = history.first else { return NSSound.beep() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { TextInserter.insert(last.text) }
+    }
+
+    func clearHistory() {
+        history.removeAll()
+        HistoryStore.erase()
+    }
+
+    /// Call when the "keep history" setting changes.
+    func applyHistorySetting() {
+        if settings.keepHistory { HistoryStore.save(history) } else { HistoryStore.erase() }
     }
 
     func copyToClipboard(_ text: String) {
@@ -289,7 +312,8 @@ final class DictationController: ObservableObject {
 
     private func deliver(_ result: DictationResult, into target: (context: DictationContext, field: FocusedField?)?) {
         history.insert(result, at: 0)
-        if history.count > 50 { history.removeLast() }
+        if history.count > HistoryStore.limit { history.removeLast(history.count - HistoryStore.limit) }
+        if settings.keepHistory { HistoryStore.save(history) }
         reset()
         TextInserter.insert(result.text)
         if let reason = result.fallbackReason { show(notice: reason) }

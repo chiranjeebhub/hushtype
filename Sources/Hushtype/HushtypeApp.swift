@@ -9,7 +9,8 @@ struct HushtypeApp: App {
         MenuBarExtra {
             MenuContent(controller: appDelegate.controller,
                         openSettings: appDelegate.showSettings,
-                        openSetup: appDelegate.showOnboarding)
+                        openSetup: appDelegate.showOnboarding,
+                        openHistory: appDelegate.showHistory)
         } label: {
             MenuBarIcon(controller: appDelegate.controller)
         }
@@ -39,6 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow.show()
     }
 
+    func showHistory() {
+        settingsWindow.show(tab: "History")
+    }
+
     func showOnboarding() {
         onboardingWindow.show()
     }
@@ -56,6 +61,7 @@ private struct MenuContent: View {
     @ObservedObject var controller: DictationController
     let openSettings: @MainActor () -> Void
     let openSetup: @MainActor () -> Void
+    let openHistory: @MainActor () -> Void
 
     var body: some View {
         Text(controller.statusLine)
@@ -69,9 +75,15 @@ private struct MenuContent: View {
 
         if !controller.history.isEmpty {
             Divider()
-            Text("Recent (click to copy)")
-            ForEach(controller.history.prefix(5)) { item in
-                Button(item.text.truncated(to: 48)) { controller.copyToClipboard(item.text) }
+            Button("Paste Last Dictation") { controller.pasteLast(delay: 0.2) }
+                .keyboardShortcut("v", modifiers: [.control, .command])
+            Menu("Recent") {
+                Text("Click to copy")
+                ForEach(controller.history.prefix(10)) { item in
+                    Button(item.text.truncated(to: 60)) { controller.copyToClipboard(item.text) }
+                }
+                Divider()
+                Button("Show All…") { openHistory() }
             }
         }
 

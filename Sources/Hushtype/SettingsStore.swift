@@ -37,6 +37,8 @@ final class SettingsStore: ObservableObject {
     @Published var snippets: [Snippet] {
         didSet { defaults.set(try? JSONEncoder().encode(snippets), forKey: "snippets") }
     }
+    /// Save recent dictations on disk so they're there after a restart.
+    @Published var keepHistory: Bool { didSet { defaults.set(keepHistory, forKey: "keepHistory") } }
     @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
     /// Where setup resumes after Hushtype relaunches itself mid-onboarding.
     @Published var onboardingStep: Int { didSet { defaults.set(onboardingStep, forKey: "onboardingStep") } }
@@ -51,6 +53,7 @@ final class SettingsStore: ObservableObject {
         useContext = defaults.object(forKey: "useContext") as? Bool ?? true
         learnFromCorrections = defaults.object(forKey: "learnFromCorrections") as? Bool ?? true
         snippets = (defaults.data(forKey: "snippets")).flatMap { try? JSONDecoder().decode([Snippet].self, from: $0) } ?? []
+        keepHistory = defaults.object(forKey: "keepHistory") as? Bool ?? true
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         onboardingStep = defaults.integer(forKey: "onboardingStep")
     }

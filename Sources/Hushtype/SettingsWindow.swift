@@ -16,7 +16,7 @@ private final class SettingsTabViewController: NSTabViewController {
 @MainActor
 final class SettingsWindowController {
     /// Every pane uses this size so the window doesn't jump when switching tabs.
-    static let paneSize = CGSize(width: 520, height: 500)
+    static let paneSize = CGSize(width: 600, height: 500)
 
     private let settings: SettingsStore
     private let controller: DictationController
@@ -42,6 +42,8 @@ final class SettingsWindowController {
             tabs.addTabViewItem(item("Claude", "sparkles", ClaudePane(settings: settings, controller: controller)))
             tabs.addTabViewItem(item("Dictionary", "character.book.closed", DictionaryPane(settings: settings)))
             tabs.addTabViewItem(item("Snippets", "text.badge.plus", SnippetsPane(settings: settings)))
+            tabs.addTabViewItem(item("History", "clock.arrow.circlepath",
+                                     HistoryPane(settings: settings, controller: controller)))
             tabs.addTabViewItem(item("Permissions", "lock.shield", PermissionsPane(controller: controller)))
 
             let window = NSWindow(contentViewController: tabs)
@@ -314,6 +316,85 @@ private struct SnippetsPane: View {
         guard let selection else { return }
         settings.snippets.removeAll { $0.id == selection }
         self.selection = nil
+    }
+}
+
+// MARK: - History
+
+private struct HistoryPane: View {
+    @ObservedObject var settings: SettingsStore
+    @ObservedObject var controller: DictationController
+    @State private var search = ""
+    @State private var confirmClear = false
+
+    private var items: [DictationResult] {
+        guard !search.isEmpty else { return controller.history }
+        return controller.history.filter {
+            $0.text.localizedCaseInsensitiveContains(search) || ($0.appName ?? "").localizedCaseInsensitiveContains(search)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                TextField("Search", text: $search).textFieldStyle(.roundedBorder)
+                Button("Clear…") { confirmClear = true }.disabled(controller.history.isEmpty)
+            }
+            if items.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "clock").font(.largeTitle).foregroundStyle(.tertiary)
+                    Text(controller.history.isEmpty ? "Your dictations show up here." : "No matches.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(items) { item in
+                    HistoryRow(item: item) { controller.copyToClipboard(item.text) }
+                }
+                .listStyle(.bordered(alternatesRowBackgrounds: true))
+            }
+            Toggle("Keep history after quitting", isOn: $settings.keepHistory)
+                .onChange(of: settings.keepHistory) { controller.applyHistorySetting() }
+            Text("Saved only on this Mac. Press ⌃⌘V anywhere to paste your last dictation again.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .confirmationDialog("Clear all dictation history?", isPresented: $confirmClear) {
+            Button("Clear History", role: .destructive) { controller.clearHistory() }
+        }
+    }
+}
+
+private struct HistoryRow: View {
+    let item: DictationResult
+    let copy: () -> Void
+    @State private var copied = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: item.kind == .command ? "wand.and.stars" : "waveform")
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.text).lineLimit(3).textSelection(.enabled)
+                Text(caption).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Button(copied ? "Copied" : "Copy") {
+                copy()
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+            }
+            .controlSize(.small)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private var caption: String {
+        var parts = [item.date.formatted(.relative(presentation: .named))]
+        if let app = item.appName { parts.append(app) }
+        parts.append(item.duration.seconds)
+        return parts.joined(separator: " · ")
     }
 }
 
