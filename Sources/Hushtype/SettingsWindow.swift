@@ -68,7 +68,7 @@ private struct GeneralPane: View {
     }
 
     private let languages = [
-        Language(id: "en", name: "English"), Language(id: "auto", name: "Detect automatically"),
+        Language(id: "en", name: "English"), Language(id: "auto", name: "System language"),
         Language(id: "es", name: "Spanish"), Language(id: "fr", name: "French"),
         Language(id: "de", name: "German"), Language(id: "hi", name: "Hindi"),
         Language(id: "pt", name: "Portuguese"), Language(id: "ja", name: "Japanese"),
@@ -85,6 +85,7 @@ private struct GeneralPane: View {
                 Picker("Language", selection: $settings.language) {
                     ForEach(languages) { Text($0.name).tag($0.id) }
                 }
+                .onChange(of: settings.language) { controller.prepareSpeechModel() }
             } header: {
                 Text("Dictation")
             } footer: {

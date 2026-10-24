@@ -1,7 +1,7 @@
 import AVFoundation
-import HushtypeCore
 
-/// Captures the default microphone and converts it to 16 kHz mono, the format every engine expects.
+/// Captures the default microphone, converts it to 16 kHz mono, and hands each buffer to the
+/// live transcriber as it arrives.
 final class AudioRecorder {
     static let sampleRate: Double = 16_000
 
@@ -10,7 +10,8 @@ final class AudioRecorder {
 
     private let engine = AVAudioEngine()
     private let lock = NSLock()
-    private var samples: [Float] = []
+    private var frames = 0
+    private var onBuffer: (AVAudioPCMBuffer) -> Void = { _ in }
     private var converter: AVAudioConverter?
     private let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
                                              sampleRate: AudioRecorder.sampleRate,
@@ -18,9 +19,11 @@ final class AudioRecorder {
 
     private(set) var isRecording = false
 
-    func start() throws {
+    /// - Parameter onBuffer: called on the audio thread with each converted buffer.
+    func start(onBuffer: @escaping (AVAudioPCMBuffer) -> Void) throws {
         guard !isRecording else { return }
-        lock.withLock { samples.removeAll(keepingCapacity: true) }
+        lock.withLock { frames = 0 }
+        self.onBuffer = onBuffer
 
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
@@ -37,16 +40,14 @@ final class AudioRecorder {
         isRecording = true
     }
 
-    /// Stops capture and returns the recording as WAV data along with its length in seconds.
-    func stop() -> (wav: Data, seconds: Double) {
-        guard isRecording else { return (Data(), 0) }
+    /// Stops capture and returns the recording's length in seconds.
+    func stop() -> Double {
+        guard isRecording else { return 0 }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isRecording = false
-
-        let captured = lock.withLock { samples }
-        let pcm = WAVEncoder.pcm16(from: captured)
-        return (WAVEncoder.encode(samples: pcm, sampleRate: Int(Self.sampleRate)), Double(captured.count) / Self.sampleRate)
+        onBuffer = { _ in }
+        return Double(lock.withLock { frames }) / Self.sampleRate
     }
 
     private func process(_ buffer: AVAudioPCMBuffer) {
@@ -66,12 +67,14 @@ final class AudioRecorder {
             status.pointee = .haveData
             return buffer
         }
-        guard error == nil, let channel = output.floatChannelData?[0] else { return }
+        guard error == nil, output.frameLength > 0, let channel = output.floatChannelData?[0] else { return }
 
-        let chunk = Array(UnsafeBufferPointer(start: channel, count: Int(output.frameLength)))
-        lock.withLock { samples.append(contentsOf: chunk) }
+        let count = Int(output.frameLength)
+        lock.withLock { frames += count }
+        onBuffer(output)
 
-        let rms = sqrt(chunk.reduce(0) { $0 + $1 * $1 } / Float(max(chunk.count, 1)))
+        let chunk = UnsafeBufferPointer(start: channel, count: count)
+        let rms = sqrt(chunk.reduce(0) { $0 + $1 * $1 } / Float(max(count, 1)))
         onLevel(min(1, rms * 8))
     }
 

@@ -3,12 +3,13 @@ import HushtypeCore
 import SwiftUI
 
 enum OnboardingStep: Int, CaseIterable {
-    case welcome, permissions, claude, tryIt
+    case welcome, permissions, speechModel, claude, tryIt
 
     var title: String {
         switch self {
         case .welcome: return "Welcome"
         case .permissions: return "Permissions"
+        case .speechModel: return "Voice model"
         case .claude: return "Connect Claude"
         case .tryIt: return "Try it"
         }
@@ -59,6 +60,9 @@ struct OnboardingView: View {
     @State private var step: OnboardingStep = .welcome
     @State private var practice = ""
     @State private var dictationsAtStart = 0
+    @State private var modelStatus: AppleSpeechModel.Status?
+    @State private var modelProgress = 0.0
+    @State private var modelError: String?
     @FocusState private var practiceFocused: Bool
 
     var body: some View {
@@ -152,6 +156,7 @@ struct OnboardingView: View {
         switch step {
         case .welcome: welcome
         case .permissions: permissionsStep
+        case .speechModel: speechModelStep
         case .claude: claudeStep
         case .tryIt: tryItStep
         }
@@ -213,6 +218,51 @@ struct OnboardingView: View {
                 Text("Setup will pick up right here after the restart.")
                     .font(.caption).foregroundStyle(.secondary)
                     .padding(.top, 8)
+            }
+        }
+    }
+
+    private var speechModelStep: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header("Download the voice model", "Hushtype turns speech into text right on this Mac with Apple's speech model. It downloads once and works offline after that.")
+            Card {
+                HStack(alignment: .top, spacing: 14) {
+                    IconTile(symbol: modelStatus == .installed ? "checkmark" : "waveform",
+                             color: modelStatus == .installed ? .green : .purple, size: 34)
+                    VStack(alignment: .leading, spacing: 8) {
+                        switch modelStatus {
+                        case .installed:
+                            Text("Voice model ready").font(.body.weight(.semibold))
+                        case .unsupported:
+                            Text("This language isn't supported on-device yet. Pick another one in Settings › General.")
+                                .foregroundStyle(.orange)
+                        default:
+                            Text(modelError ?? "Downloading…").font(.body.weight(.semibold))
+                            ProgressView(value: modelProgress)
+                            if modelError != nil {
+                                Button("Try again") { installSpeechModel() }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear { installSpeechModel() }
+    }
+
+    private func installSpeechModel() {
+        let language = settings.transcriptionOptions.language
+        modelError = nil
+        Task {
+            modelStatus = await AppleSpeechModel.status(language: language)
+            guard modelStatus == .notInstalled else { return }
+            do {
+                try await AppleSpeechModel.install(language: language) { value in
+                    Task { @MainActor in modelProgress = value }
+                }
+                modelStatus = await AppleSpeechModel.status(language: language)
+            } catch {
+                modelError = error.localizedDescription
             }
         }
     }
@@ -318,6 +368,7 @@ struct OnboardingView: View {
     private func isComplete(_ item: OnboardingStep) -> Bool {
         switch item {
         case .permissions: return Permissions.allGranted && controller.hotkeyActive
+        case .speechModel: return modelStatus == .installed
         case .claude: return !settings.cleanupEnabled || !settings.apiKey(.anthropic).isEmpty
         default: return true
         }
@@ -358,7 +409,7 @@ struct OnboardingView: View {
         }
         if step == .permissions && isComplete(.permissions) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-                if step == .permissions && isComplete(.permissions) { go(to: .claude) }
+                if step == .permissions && isComplete(.permissions) { go(to: .speechModel) }
             }
         }
     }

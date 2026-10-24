@@ -1,7 +1,7 @@
 import AppKit
 import HushtypeCore
 
-/// Runs one dictation at a time: hold key → record → transcribe → clean up → paste.
+/// Runs one dictation at a time: hold key → record and transcribe live → polish → paste.
 @MainActor
 final class DictationController: ObservableObject {
     enum Phase: Equatable {
@@ -34,6 +34,7 @@ final class DictationController: ObservableObject {
     private let recorder = AudioRecorder()
     private lazy var overlay = OverlayPanel(controller: self)
     private var pipelineTask: Task<Void, Never>?
+    private var transcription: AppleSpeechTranscriber?
     private var errorDismissTask: Task<Void, Never>?
 
     init(settings: SettingsStore) {
@@ -59,6 +60,17 @@ final class DictationController: ObservableObject {
     func start() {
         hotkey.triggerKey = settings.triggerKey
         hotkeyActive = hotkey.start()
+        prepareSpeechModel()
+    }
+
+    /// Downloads the on-device speech model in the background if this language doesn't have it yet.
+    func prepareSpeechModel() {
+        let language = settings.transcriptionOptions.language
+        Task.detached {
+            if await AppleSpeechModel.status(language: language) == .notInstalled {
+                try? await AppleSpeechModel.install(language: language)
+            }
+        }
     }
 
     func restartHotkey() {
@@ -76,11 +88,15 @@ final class DictationController: ObservableObject {
     private func beginRecording() {
         guard phase == .idle || isError else { return }
         errorDismissTask?.cancel()
+        let session = AppleSpeechTranscriber(options: settings.transcriptionOptions)
         do {
-            try recorder.start()
+            try recorder.start(onBuffer: session.append)
+            transcription = session
+            settings.makeCleaner()?.prewarm()
             phase = .recording
             overlay.show()
         } catch {
+            session.cancel()
             show(error: error.localizedDescription)
         }
     }
@@ -88,25 +104,30 @@ final class DictationController: ObservableObject {
     private func cancelRecording() {
         guard phase == .recording else { return }
         _ = recorder.stop()
+        transcription?.cancel()
+        transcription = nil
         reset()
     }
 
     private func finishRecording() {
         guard phase == .recording else { return }
-        let (wav, seconds) = recorder.stop()
+        let releasedAt = Date()
+        let seconds = recorder.stop()
+        guard let session = transcription else { return reset() }
+        transcription = nil
         guard seconds >= Self.minimumRecordingSeconds else {
+            session.cancel()
             reset()
             return
         }
 
         phase = .transcribing
-        let pipeline = DictationPipeline(transcriber: settings.makeTranscriber(),
-                                         cleaner: settings.makeCleaner(),
-                                         options: settings.transcriptionOptions)
+        let pipeline = DictationPipeline(cleaner: settings.makeCleaner(), vocabulary: settings.vocabulary)
         // The controller lives for the whole app session, so capturing it strongly is fine.
         pipelineTask = Task {
             do {
-                let result = try await pipeline.run(wav: wav) {
+                let transcript = try await session.finish()
+                let result = try await pipeline.polish(transcript, releasedAt: releasedAt) {
                     Task { @MainActor in self.phase = .cleaning }
                 }
                 deliver(result)
