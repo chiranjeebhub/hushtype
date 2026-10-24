@@ -68,8 +68,8 @@ final class SettingsStore: ObservableObject {
 
     func makeTranscriber() -> Transcriber {
         switch engine {
-        case .groq: return GroqTranscriber(apiKey: apiKey(.groq))
-        case .deepgram: return DeepgramTranscriber(apiKey: apiKey(.deepgram))
+        case .groq: return GroqTranscriber(apiKey: Keychain.read(account: "groq") ?? "")
+        case .deepgram: return DeepgramTranscriber(apiKey: Keychain.read(account: "deepgram") ?? "")
         case .localWhisper: return LocalWhisperTranscriber(executablePath: whisperExecutablePath, modelPath: whisperModelPath)
         }
     }

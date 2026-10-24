@@ -140,14 +140,7 @@ private extension Data {
 }
 
 final class APIKeyValidatorTests: XCTestCase {
-    func testRequestsAuthenticateEachService() {
-        let groq = APIKeyValidator.request(for: .groq, key: "k")
-        XCTAssertEqual(groq.url?.host, "api.groq.com")
-        XCTAssertEqual(groq.value(forHTTPHeaderField: "Authorization"), "Bearer k")
-
-        let deepgram = APIKeyValidator.request(for: .deepgram, key: "k")
-        XCTAssertEqual(deepgram.value(forHTTPHeaderField: "Authorization"), "Token k")
-
+    func testAnthropicRequestIsAuthenticated() {
         let anthropic = APIKeyValidator.request(for: .anthropic, key: "k")
         XCTAssertEqual(anthropic.url?.absoluteString, "https://api.anthropic.com/v1/models")
         XCTAssertEqual(anthropic.value(forHTTPHeaderField: "x-api-key"), "k")

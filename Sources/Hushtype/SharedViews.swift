@@ -169,7 +169,7 @@ struct APIKeyField: View {
                     Text("Checking…").foregroundStyle(.secondary)
                 } else {
                     Text("Don't have one?").foregroundStyle(.secondary)
-                    Link("Get a free key ↗", destination: service.keysURL)
+                    Link("Get an \(service.displayName) key ↗", destination: service.keysURL)
                 }
             }
             .font(.caption)

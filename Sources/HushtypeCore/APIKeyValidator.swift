@@ -1,35 +1,15 @@
 import Foundation
 
-/// The cloud services Hushtype can use, each with its own API key.
+/// The services Hushtype holds an API key for.
 public enum APIService: String, CaseIterable, Identifiable, Sendable {
-    case groq, deepgram, anthropic
+    case anthropic
 
     public var id: String { rawValue }
 
-    public var displayName: String {
-        switch self {
-        case .groq: return "Groq"
-        case .deepgram: return "Deepgram"
-        case .anthropic: return "Anthropic"
-        }
-    }
+    public var displayName: String { "Anthropic" }
 
     /// Where to create a key.
-    public var keysURL: URL {
-        switch self {
-        case .groq: return URL(string: "https://console.groq.com/keys")!
-        case .deepgram: return URL(string: "https://console.deepgram.com/")!
-        case .anthropic: return URL(string: "https://console.anthropic.com/settings/keys")!
-        }
-    }
-
-    public var keyPlaceholder: String {
-        switch self {
-        case .groq: return "gsk_…"
-        case .deepgram: return "Deepgram API key"
-        case .anthropic: return "sk-ant-…"
-        }
-    }
+    public var keysURL: URL { URL(string: "https://console.anthropic.com/settings/keys")! }
 }
 
 public enum KeyValidation: Equatable, Sendable {
@@ -55,12 +35,6 @@ public enum APIKeyValidator {
     static func request(for service: APIService, key: String) -> URLRequest {
         var request: URLRequest
         switch service {
-        case .groq:
-            request = URLRequest(url: URL(string: "https://api.groq.com/openai/v1/models")!)
-            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        case .deepgram:
-            request = URLRequest(url: URL(string: "https://api.deepgram.com/v1/projects")!)
-            request.setValue("Token \(key)", forHTTPHeaderField: "Authorization")
         case .anthropic:
             request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/models")!)
             request.setValue(key, forHTTPHeaderField: "x-api-key")
