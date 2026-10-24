@@ -69,6 +69,11 @@ docs/                   website, served by GitHub Pages at hushtype.chiranjeeb.d
 assets/social-preview.* social preview image (node scripts/render-social-preview.mjs regenerates the PNG)
 ```
 
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build, test and
+send a change.
+
 ## License
 
-MIT
+Hushtype is open source under the [MIT License](LICENSE). Copyright (c) 2026 Chiranjeeb Jena.
