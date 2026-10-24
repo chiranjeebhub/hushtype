@@ -1,0 +1,143 @@
+<!doctype html>
+<!-- Source for assets/social-preview.png (1280x640). Regenerate with:
+     node scripts/render-social-preview.mjs -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    font-family: "Inter", "SF Pro Display", system-ui, sans-serif;
+    background: #08070f;
+    color: #f4f3ff;
+    position: relative;
+    -webkit-font-smoothing: antialiased;
+  }
+  .glow { position: absolute; border-radius: 50%; filter: blur(90px); }
+  .g1 { width: 720px; height: 520px; left: -160px; top: -200px; background: rgba(109, 91, 255, .42); }
+  .g2 { width: 560px; height: 460px; right: -120px; bottom: -220px; background: rgba(124, 245, 200, .16); }
+  .g3 { width: 420px; height: 360px; right: 240px; top: -120px; background: rgba(160, 110, 255, .22); }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(ellipse 80% 70% at 30% 40%, #000 30%, transparent 80%);
+  }
+  .wrap { position: absolute; inset: 0; padding: 72px 80px; display: flex; }
+  .left { width: 600px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 20px; }
+  .brand svg { width: 76px; height: 76px; filter: drop-shadow(0 12px 28px rgba(109,91,255,.55)); }
+  .brand .name { font-size: 46px; font-weight: 700; letter-spacing: -1.2px; }
+  h1 {
+    margin-top: 52px;
+    font-size: 66px; line-height: 1.04; font-weight: 800; letter-spacing: -2.6px;
+  }
+  h1 .accent {
+    background: linear-gradient(90deg, #a99cff 0%, #7cf5c8 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { margin-top: 22px; font-size: 22px; line-height: 1.45; color: #b9b5d6; max-width: 540px; }
+  .chips { margin-top: auto; display: flex; gap: 10px; }
+  .chip {
+    font-size: 15px; font-weight: 500; color: #d9d6f5;
+    padding: 9px 14px; border-radius: 999px;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10);
+  }
+  .chip b { color: #7cf5c8; font-weight: 600; }
+
+  /* right: a little macOS scene */
+  .right { flex: 1; position: relative; }
+  .win {
+    position: absolute; right: 0; top: 30px; width: 500px;
+    border-radius: 18px; overflow: hidden;
+    background: linear-gradient(180deg, #1b1a28 0%, #141320 100%);
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 40px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .bar { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .bar .t { margin-left: 14px; font-size: 14px; color: #8f8bab; font-weight: 500; }
+  .msgs { padding: 22px 22px 10px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { display: flex; gap: 12px; }
+  .av { width: 34px; height: 34px; border-radius: 9px; flex: none; }
+  .who { font-size: 14px; font-weight: 600; color: #e9e7ff; }
+  .who span { color: #6f6b8c; font-weight: 400; margin-left: 6px; }
+  .txt { font-size: 15.5px; color: #c6c2e2; line-height: 1.45; margin-top: 3px; }
+  .compose {
+    margin: 10px 22px 60px; padding: 14px 16px; border-radius: 12px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(124,245,200,.35);
+    box-shadow: 0 0 0 4px rgba(124,245,200,.07);
+    font-size: 15.5px; line-height: 1.45; color: #f4f3ff;
+  }
+  .caret { display: inline-block; width: 2px; height: 19px; background: #7cf5c8; vertical-align: -4px; margin-left: 1px; border-radius: 1px; }
+
+  .pill {
+    position: absolute; left: -40px; top: 360px;
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 20px 14px 16px; border-radius: 999px;
+    background: rgba(18,16,30,.86); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 24px 50px rgba(0,0,0,.6), 0 0 40px rgba(109,91,255,.35);
+  }
+  .key {
+    font-size: 14px; font-weight: 600; color: #e9e7ff;
+    padding: 6px 10px; border-radius: 8px;
+    background: linear-gradient(180deg, #34324a, #24223a);
+    border: 1px solid rgba(255,255,255,.12); box-shadow: 0 2px 0 #0d0c16;
+  }
+  .wave { display: flex; align-items: center; gap: 4px; height: 30px; }
+  .wave i { display: block; width: 4px; border-radius: 2px; background: linear-gradient(180deg, #b3a8ff, #6d5bff); }
+  .pill .lbl { font-size: 14px; color: #a9a5c6; font-weight: 500; }
+</style>
+</head>
+<body>
+  <div class="glow g1"></div><div class="glow g3"></div><div class="glow g2"></div>
+  <div class="grid"></div>
+  <div class="wrap">
+    <div class="left">
+      <div class="brand">
+        <svg viewBox="0 0 512 512"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6D5BFF"/><stop offset="1" stop-color="#2A1E8C"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#bg)"/><g fill="#fff"><rect x="96" y="226" width="34" height="60" rx="17" opacity=".55"/><rect x="152" y="176" width="34" height="160" rx="17" opacity=".7"/><rect x="208" y="126" width="34" height="260" rx="17" opacity=".85"/><rect x="264" y="196" width="34" height="120" rx="17"/></g><rect x="352" y="116" width="30" height="280" rx="15" fill="#7CF5C8"/><rect x="322" y="116" width="90" height="26" rx="13" fill="#7CF5C8"/><rect x="322" y="370" width="90" height="26" rx="13" fill="#7CF5C8"/></svg>
+        <div class="name">Hushtype</div>
+      </div>
+      <h1>Speak naturally.<br><span class="accent">Type perfectly.</span></h1>
+      <p class="sub">Hold a key, talk, let go. Polished text lands in whatever app you're in. Native, private, open source.</p>
+      <div class="chips">
+        <div class="chip"><b>●</b> On-device speech</div>
+        <div class="chip">Claude polish</div>
+        <div class="chip">macOS 26</div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="win">
+        <div class="bar">
+          <div class="dot" style="background:#ff5f57"></div>
+          <div class="dot" style="background:#febc2e"></div>
+          <div class="dot" style="background:#28c840"></div>
+          <div class="t"># launch</div>
+        </div>
+        <div class="msgs">
+          <div class="msg">
+            <div class="av" style="background:linear-gradient(135deg,#f6a35b,#e0605e)"></div>
+            <div><div class="who">Maya <span>9:41</span></div><div class="txt">Are we still on for the demo tomorrow?</div></div>
+          </div>
+          <div class="msg">
+            <div class="av" style="background:linear-gradient(135deg,#5bc8f6,#5e6ee0)"></div>
+            <div><div class="who">Arjun <span>9:42</span></div><div class="txt">5 works for me, but I might run late 🙏</div></div>
+          </div>
+        </div>
+        <div class="compose">Yes! Let's do 6 pm instead of 5, and I'll bring the new build.<span class="caret"></span></div>
+      </div>
+      <div class="pill">
+        <div class="key">⌥ option</div>
+        <div class="wave">
+          <i style="height:8px"></i><i style="height:16px"></i><i style="height:26px"></i><i style="height:14px"></i><i style="height:22px"></i><i style="height:30px"></i><i style="height:18px"></i><i style="height:10px"></i><i style="height:20px"></i><i style="height:12px"></i><i style="height:6px"></i>
+        </div>
+        <div class="lbl">"yes let's do five, no, six pm…"</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
