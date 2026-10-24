@@ -11,6 +11,16 @@ extension Color {
     static let hushMint = Color(red: 0.49, green: 0.94, blue: 0.77)
 }
 
+extension Color {
+    /// The window's ground: a deep, slightly violet charcoal in dark mode, the system window
+    /// colour in light mode.
+    static let settingsBackground = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 0.11, green: 0.105, blue: 0.125, alpha: 1)
+            : NSColor.windowBackgroundColor
+    })
+}
+
 extension ShapeStyle where Self == LinearGradient {
     /// The app icon's indigo, for the few places that carry the brand.
     static var hushBrand: LinearGradient {
@@ -23,11 +33,14 @@ extension ShapeStyle where Self == LinearGradient {
 /// One settings pane: a large title, a sentence saying what the pane is for, then its sections.
 struct SettingsPage<Content: View>: View {
     let pane: SettingsPane
+    /// Home opens straight on its hero instead of a title.
+    var showsHeader = true
     @ViewBuilder var content: Content
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                if showsHeader {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(pane.title)
                         .font(.system(size: 24, weight: .semibold))
@@ -37,6 +50,7 @@ struct SettingsPage<Content: View>: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.bottom, 22)
+                }
                 content
             }
             .padding(.horizontal, 28)
@@ -389,22 +403,5 @@ struct FlowLayout: Layout {
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }
-    }
-}
-
-/// The translucent material behind the whole window.
-struct WindowMaterial: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .underWindowBackground
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = .behindWindow
-        view.state = .followsWindowActiveState
-        return view
-    }
-
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.material = material
     }
 }

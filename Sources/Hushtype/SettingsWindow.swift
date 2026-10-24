@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Combine
 import HushtypeCore
 import SwiftUI
@@ -158,16 +159,19 @@ private struct SettingsRoot: View {
             SettingsSidebar(selection: $navigation.pane, settings: settings, controller: controller,
                             permissions: permissions)
                 .frame(width: 228)
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.045)))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
                 .padding(8)
             detail
+                .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .id(navigation.pane)
                 .transition(.opacity)
         }
         .animation(.easeOut(duration: 0.15), value: navigation.pane)
         .ignoresSafeArea()
-        .background(WindowMaterial().ignoresSafeArea())
+        .background(Color.settingsBackground.ignoresSafeArea())
         .tint(.hushViolet)
         .onAppear { permissions.start() }
         .onDisappear { permissions.stop() }
@@ -261,6 +265,8 @@ private struct SettingsSidebar: View {
                 Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain)
                     .foregroundStyle(.tertiary)
+            } else {
+                Text("⌘F").font(.caption).foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, 9)
@@ -327,7 +333,7 @@ private struct StatusCard: View {
         switch controller.phase {
         case .recording: return ("Listening…", .hushViolet)
         case .transcribing, .cleaning: return ("Working…", .hushViolet)
-        default: return ("Ready", .green)
+        default: return ("Ready", .hushMint)
         }
     }
 
@@ -339,10 +345,10 @@ private struct StatusCard: View {
                     Text("Hold \(settings.triggerKey.shortName) to talk").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                Circle()
-                    .fill(state.color)
-                    .frame(width: 7, height: 7)
-                    .shadow(color: state.color.opacity(0.7), radius: 4)
+                Image(systemName: "waveform")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(state.color)
+                    .symbolEffect(.variableColor.iterative, options: .repeating, isActive: state.color != .orange)
             }
             .padding(.horizontal, 11)
             .padding(.vertical, 10)
@@ -377,16 +383,16 @@ private struct HomePane: View {
     private var ready: Bool { Permission.allCases.allSatisfy(permissions.isGranted) && controller.hotkeyActive }
 
     var body: some View {
-        SettingsPage(pane: .home) {
+        SettingsPage(pane: .home, showsHeader: false) {
             hero
             HStack(spacing: 10) {
                 stat("\(today.count)", unit: nil, "Dictations today")
-                stat("\(wordsToday.formatted())", unit: nil, "Words today")
                 if let stats = controller.latency {
                     stat(String(format: "%.1f", stats.median), unit: "s", "Typical wait for text")
                 } else {
                     stat("–", unit: nil, "Typical wait for text")
                 }
+                stat("\(wordsToday.formatted())", unit: nil, "Words today")
             }
             .padding(.top, 12)
 
@@ -407,7 +413,8 @@ private struct HomePane: View {
                     }
                 }
                 Button("See all history ›") { open(.history) }
-                    .buttonStyle(.link)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.hushViolet)
                     .padding(.top, 10)
                     .padding(.leading, 2)
             }
@@ -437,8 +444,10 @@ private struct HomePane: View {
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
                     }
+                    if let microphone = AVCaptureDevice.default(for: .audio)?.localizedName {
+                        pill { Image(systemName: "mic") } label: { Text(microphone) }
+                    }
                     pill { Image(systemName: "sparkles") } label: { Text(settings.cleanupEnabled ? "Polish on" : "Polish off") }
-                    pill { Image(systemName: "globe") } label: { Text(settings.language == "auto" ? "System language" : Locale.current.localizedString(forLanguageCode: settings.language) ?? settings.language) }
                 }
                 .padding(.top, 4)
             }
@@ -1189,9 +1198,14 @@ private struct PermissionsPane: View {
         SettingsPage(pane: .permissions) {
             SettingsCard {
                 ForEach(Permission.allCases) { permission in
-                    PermissionRow(permission: permission, granted: permissions.isGranted(permission))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                    SettingsRow(title: permission.title, subtitle: permission.purpose, symbol: permission.symbol) {
+                        if permissions.isGranted(permission) {
+                            StatusPill(text: "Allowed")
+                        } else {
+                            Button("Allow") { permission.request() }
+                                .buttonStyle(.borderedProminent)
+                        }
+                    }
                 }
             }
             HStack(spacing: 8) {
