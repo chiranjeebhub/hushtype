@@ -22,8 +22,9 @@ on a free account).
    create a key with the *Developer* role. Download the `.p8` (you can only download it once) and note the
    Key ID and Issuer ID.
 3. **Sparkle signing keys.** After any `swift build`, run
-   `.build/artifacts/sparkle/Sparkle/bin/generate_keys`. It saves the private key in your login keychain and
-   prints the public key. Export the private key with `generate_keys -x sparkle-private-key.txt`.
+   `.build/artifacts/sparkle/Sparkle/bin/generate_keys --account hushtype`. It saves the private key in your login
+   keychain under its own `hushtype` account (so it isn't shared with other apps) and prints the public key.
+   Export the private key with `generate_keys --account hushtype -x sparkle-private-key.txt`.
 4. **GitHub settings** (repository › Settings › Secrets and variables › Actions):
 
    | Kind | Name | Value |
@@ -57,7 +58,9 @@ HUSHTYPE_SPARKLE_PUBLIC_KEY="<public key>" \
 scripts/release.sh 0.2.0
 ```
 
-Without `SPARKLE_PRIVATE_KEY`, `sign_update` uses the key `generate_keys` stored in your keychain. Upload the
+Without `SPARKLE_PRIVATE_KEY`, `sign_update` uses the key stored in your keychain by
+`generate_keys --account hushtype` (the script passes `--account hushtype`; set `HUSHTYPE_SPARKLE_ACCOUNT` to use
+another account). Upload the
 three files in `dist/` to a GitHub release tagged `v0.2.0`.
 
 ## Development builds

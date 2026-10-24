@@ -11,7 +11,8 @@
 #     ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH   an App Store Connect API key (.p8)
 #   HUSHTYPE_SPARKLE_PUBLIC_KEY  Sparkle EdDSA public key (goes into Info.plist)
 #   SPARKLE_PRIVATE_KEY          the matching private key, to sign the update
-#                                (or leave unset to use the one generate_keys saved in the keychain)
+#                                (or leave unset to use the one `generate_keys --account hushtype` saved in the
+#                                keychain; HUSHTYPE_SPARKLE_ACCOUNT overrides the account name)
 set -euo pipefail
 
 VERSION="${1:?usage: scripts/release.sh <version> [build-number]}"
@@ -67,7 +68,7 @@ if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
   SIGNATURE="$("$SIGN_UPDATE" --ed-key-file "$KEY_FILE" "$ZIP")"
   rm -f "$KEY_FILE"
 else
-  SIGNATURE="$("$SIGN_UPDATE" "$ZIP")"
+  SIGNATURE="$("$SIGN_UPDATE" --account "${HUSHTYPE_SPARKLE_ACCOUNT:-hushtype}" "$ZIP")"
 fi
 URL="https://github.com/$REPO/releases/download/v$VERSION/Hushtype-$VERSION.zip"
 cat > dist/appcast.xml <<XML
