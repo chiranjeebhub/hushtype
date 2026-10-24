@@ -138,10 +138,10 @@ final class PermissionMonitor: ObservableObject {
 
     init() { refresh() }
 
-    func start() {
+    func start(every interval: TimeInterval = 0.5) {
         guard timer == nil else { return }
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
     }
