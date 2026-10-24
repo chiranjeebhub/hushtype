@@ -27,7 +27,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.start()
-        if !settings.hasCompletedOnboarding || !Permissions.allGranted {
+        // `open Hushtype.app --args -HushtypeOpenSettings Claude` jumps straight to a Settings tab.
+        if let tab = UserDefaults.standard.string(forKey: "HushtypeOpenSettings") {
+            settingsWindow.show(tab: tab)
+        } else if !settings.hasCompletedOnboarding || !Permissions.allGranted {
             showOnboarding()
         }
     }

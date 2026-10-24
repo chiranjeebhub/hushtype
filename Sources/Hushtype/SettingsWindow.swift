@@ -16,9 +16,13 @@ final class SettingsWindowController {
         self.runSetup = runSetup
     }
 
-    func show() {
+    private var tabs: NSTabViewController?
+
+    /// Opens the window, optionally on the tab with this label (e.g. "Claude").
+    func show(tab: String? = nil) {
         if window == nil {
             let tabs = NSTabViewController()
+            self.tabs = tabs
             tabs.tabStyle = .toolbar
             tabs.addTabViewItem(item("General", "gearshape",
                                      GeneralPane(settings: settings, controller: controller, runSetup: runSetup)))
@@ -32,6 +36,9 @@ final class SettingsWindowController {
             window.isReleasedWhenClosed = false
             window.center()
             self.window = window
+        }
+        if let tab, let tabs, let index = tabs.tabViewItems.firstIndex(where: { $0.label == tab }) {
+            tabs.selectedTabViewItemIndex = index
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)

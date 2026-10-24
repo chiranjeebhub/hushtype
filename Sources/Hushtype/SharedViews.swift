@@ -261,6 +261,7 @@ struct PolishCard: View {
                             Text("Removes filler words, fixes punctuation, applies your corrections.")
                                 .font(.callout).foregroundStyle(.secondary)
                         }
+                        Spacer(minLength: 16)
                     }
                 }
                 .toggleStyle(.switch)
@@ -272,6 +273,7 @@ struct PolishCard: View {
                             : "um so let's meet at 5, no wait, 6 pm tomorrow", muted: false)
                 }
                 .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
 
                 if settings.cleanupEnabled {

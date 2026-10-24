@@ -69,7 +69,7 @@ struct OnboardingView: View {
                 content
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.horizontal, 36)
-                    .padding(.top, 44)
+                    .padding(.top, 40)
                     .id(step)
                     .transition(.opacity.combined(with: .offset(x: 12)))
                 footer
@@ -77,7 +77,7 @@ struct OnboardingView: View {
                     .padding(.bottom, 24)
             }
         }
-        .frame(width: 780, height: 560)
+        .frame(width: 760, height: 480)
         .onAppear {
             step = resumeStep()
             dictationsAtStart = controller.history.count
@@ -95,8 +95,8 @@ struct OnboardingView: View {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 30, height: 30)
                 Text("Hushtype").font(.title3.weight(.semibold))
             }
-            .padding(.top, 52)
-            .padding(.bottom, 28)
+            .padding(.top, 48)
+            .padding(.bottom, 24)
 
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(OnboardingStep.allCases, id: \.rawValue) { item in
@@ -243,7 +243,8 @@ struct OnboardingView: View {
                 .font(.title3)
                 .focused($practiceFocused)
                 .scrollContentBackground(.hidden)
-                .padding(12)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 24)
                 .frame(height: 130)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .textBackgroundColor)))
                 .overlay(RoundedRectangle(cornerRadius: 12)
@@ -260,7 +261,6 @@ struct OnboardingView: View {
             }
             .padding(.top, 10)
         }
-        .onAppear { practiceFocused = true }
     }
 
     @ViewBuilder private var practiceStatus: some View {
@@ -283,8 +283,7 @@ struct OnboardingView: View {
         HStack {
             if step != .welcome {
                 Button("Back") { go(to: OnboardingStep(rawValue: step.rawValue - 1)!) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .controlSize(.large)
             }
             Spacer()
             if let skip = skipTitle {
