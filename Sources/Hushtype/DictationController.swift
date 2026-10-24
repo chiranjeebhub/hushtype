@@ -23,6 +23,8 @@ final class DictationController: ObservableObject {
 
     /// Taps shorter than this are treated as accidental and discarded.
     private static let minimumRecordingSeconds = 0.3
+    /// How long the mic stays open after a dictation, so back-to-back ones start instantly.
+    private static let warmAfterUse: Duration = .seconds(30)
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var level: Float = 0
@@ -36,6 +38,10 @@ final class DictationController: ObservableObject {
     private var pipelineTask: Task<Void, Never>?
     private var transcription: AppleSpeechTranscriber?
     private var errorDismissTask: Task<Void, Never>?
+    private var coolDownTask: Task<Void, Never>?
+    /// True while the Mac is asleep or the screen is locked; the mic is always closed then.
+    private var micSuspended = false
+    private var systemObservers: [NSObjectProtocol] = []
 
     init(settings: SettingsStore) {
         self.settings = settings
@@ -43,6 +49,7 @@ final class DictationController: ObservableObject {
         hotkey.onRelease = { [weak self] in Task { @MainActor in self?.finishRecording() } }
         hotkey.onCancel = { [weak self] in Task { @MainActor in self?.cancelRecording() } }
         recorder.onLevel = { [weak self] value in Task { @MainActor in self?.level = value } }
+        observeSleepAndLock()
     }
 
     var statusLine: String {
@@ -61,6 +68,60 @@ final class DictationController: ObservableObject {
         hotkey.triggerKey = settings.triggerKey
         hotkeyActive = hotkey.start()
         prepareSpeechModel()
+        applyMicMode()
+    }
+
+    /// Opens or readies the mic to match the "Always-ready microphone" setting. Call again
+    /// whenever that setting or the microphone permission changes.
+    func applyMicMode() {
+        guard Permission.microphone.isGranted, !micSuspended, phase != .recording else { return }
+        if settings.alwaysReadyMic {
+            coolDownTask?.cancel()
+            try? recorder.warmUp()
+        } else if recorder.isWarm {
+            scheduleCoolDown()
+        } else {
+            recorder.prepare()
+        }
+    }
+
+    private func scheduleCoolDown() {
+        coolDownTask?.cancel()
+        guard !settings.alwaysReadyMic else { return }
+        coolDownTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.warmAfterUse)
+            guard !Task.isCancelled, let self, self.phase != .recording else { return }
+            self.recorder.coolDown()
+            self.recorder.prepare()
+        }
+    }
+
+    private func observeSleepAndLock() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        let distributed = DistributedNotificationCenter.default()
+        let suspend: @Sendable (Notification) -> Void = { [weak self] _ in
+            Task { @MainActor in self?.suspendMic(true) }
+        }
+        let resume: @Sendable (Notification) -> Void = { [weak self] _ in
+            Task { @MainActor in self?.suspendMic(false) }
+        }
+        systemObservers = [
+            workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main, using: suspend),
+            workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: resume),
+            distributed.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main, using: suspend),
+            distributed.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main, using: resume),
+        ]
+    }
+
+    private func suspendMic(_ suspended: Bool) {
+        micSuspended = suspended
+        if suspended {
+            coolDownTask?.cancel()
+            if phase == .recording { cancelRecording() }
+            recorder.coolDown()
+        } else {
+            applyMicMode()
+        }
     }
 
     /// Downloads the on-device speech model in the background if this language doesn't have it yet.
@@ -88,6 +149,7 @@ final class DictationController: ObservableObject {
     private func beginRecording() {
         guard phase == .idle || isError else { return }
         errorDismissTask?.cancel()
+        coolDownTask?.cancel()
         let session = AppleSpeechTranscriber(options: settings.transcriptionOptions)
         do {
             try recorder.start(onBuffer: session.append)
@@ -105,6 +167,7 @@ final class DictationController: ObservableObject {
     private func cancelRecording() {
         guard phase == .recording else { return }
         _ = recorder.stop()
+        scheduleCoolDown()
         transcription?.cancel()
         transcription = nil
         reset()
@@ -114,6 +177,7 @@ final class DictationController: ObservableObject {
         guard phase == .recording else { return }
         let releasedAt = Date()
         let seconds = recorder.stop()
+        scheduleCoolDown()
         if settings.soundsEnabled { Chime.playStop() }
         guard let session = transcription else { return reset() }
         transcription = nil

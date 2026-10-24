@@ -20,7 +20,7 @@ enum Permission: String, CaseIterable, Identifiable {
 
     var purpose: String {
         switch self {
-        case .microphone: return "Hear you while you hold the dictation key. Hushtype never listens otherwise."
+        case .microphone: return "Hear you while you hold the dictation key. Nothing is kept or sent otherwise."
         case .inputMonitoring: return "Notice when you hold the dictation key, whichever app you're in."
         case .accessibility: return "Type the finished text into the app you're using."
         }

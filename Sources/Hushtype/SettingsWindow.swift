@@ -16,7 +16,7 @@ private final class SettingsTabViewController: NSTabViewController {
 @MainActor
 final class SettingsWindowController {
     /// Every pane uses this size so the window doesn't jump when switching tabs.
-    static let paneSize = CGSize(width: 520, height: 400)
+    static let paneSize = CGSize(width: 520, height: 480)
 
     private let settings: SettingsStore
     private let controller: DictationController
@@ -108,6 +108,17 @@ private struct GeneralPane: View {
                 Footnote(settings.triggerKey == .fn
                          ? "Set System Settings › Keyboard › “Press 🌐 key to” to “Do Nothing” so macOS doesn't also react to Fn."
                          : "Hold the key to talk and let go to insert. Press any other key while holding to cancel.")
+            }
+
+            Section {
+                Toggle("Always-ready microphone", isOn: $settings.alwaysReadyMic)
+                    .onChange(of: settings.alwaysReadyMic) { controller.applyMicMode() }
+            } header: {
+                Text("Microphone")
+            } footer: {
+                Footnote(settings.alwaysReadyMic
+                         ? "The mic stays open, so dictation starts the instant you press and catches a word you began a beat early. macOS shows its orange mic dot the whole time. Nothing is kept or sent until you press."
+                         : "The mic stays open for 30 seconds after you dictate, so the next one starts instantly. Turn this on to keep it ready all the time.")
             }
 
             Section("System") {
