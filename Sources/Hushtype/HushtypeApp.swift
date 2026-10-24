@@ -44,10 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         watchWindowsForDockIcon()
         controller.start()
         permissions.start(every: 2)
-        // Once Input Monitoring is granted, try the dictation key again without waiting for Settings.
+        // Once Accessibility is granted, try the dictation key again without waiting for Settings.
         permissionWatch = permissions.$granted.sink { [weak self] granted in
             MainActor.assumeIsolated {
-                guard let self, granted.contains(.inputMonitoring), !self.controller.hotkeyActive else { return }
+                guard let self, granted.contains(.accessibility), !self.controller.hotkeyActive else { return }
                 self.controller.restartHotkey()
             }
         }
@@ -117,7 +117,7 @@ private struct MenuContent: View {
         if permissions.granted.count < Permission.allCases.count {
             Button("Finish Setting Up Hushtype…", systemImage: "checklist") { openSetup() }
         } else if !controller.hotkeyActive {
-            // Everything is granted, but macOS only applies Input Monitoring to a fresh process.
+            // Everything is granted, but macOS hasn't let the dictation key start in this process.
             Button("Restart to Turn On the Dictation Key", systemImage: "arrow.clockwise") { Permissions.relaunch() }
         }
 

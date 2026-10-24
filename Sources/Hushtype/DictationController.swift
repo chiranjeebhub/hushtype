@@ -87,7 +87,9 @@ final class DictationController: ObservableObject {
     func start() {
         hotkey.triggerKey = settings.triggerKey
         hotkey.handsFreeEnabled = settings.handsFree
-        hotkeyActive = hotkey.start()
+        // The event tap runs on the Accessibility grant. Creating it before that would make macOS ask for
+        // Input Monitoring instead, which it refuses without a prompt.
+        hotkeyActive = AXIsProcessTrusted() && hotkey.start()
         prepareSpeechModel()
         applyMicMode()
     }

@@ -23,7 +23,7 @@ final class HotkeyMonitor {
     private var runLoopSource: CFRunLoopSource?
     private var gesture = HotkeyGesture()
 
-    /// Returns false when Input Monitoring has not been granted yet.
+    /// Returns false when macOS won't let Hushtype watch the keyboard yet.
     @discardableResult
     func start() -> Bool {
         guard tap == nil else { return true }

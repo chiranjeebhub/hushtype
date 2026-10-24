@@ -2,10 +2,12 @@ import AppKit
 import ApplicationServices
 import AVFoundation
 
-/// The three macOS permissions Hushtype needs, and the smoothest way to ask for each.
+/// The two macOS permissions Hushtype needs, and the smoothest way to ask for each.
+///
+/// There's no Input Monitoring step: Accessibility also lets the dictation key's event tap see key presses, and
+/// on macOS 27 asking for Input Monitoring is refused without a prompt and never lists Hushtype in System Settings.
 enum Permission: String, CaseIterable, Identifiable {
     case microphone
-    case inputMonitoring
     case accessibility
 
     var id: String { rawValue }
@@ -13,7 +15,6 @@ enum Permission: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .microphone: return "Microphone"
-        case .inputMonitoring: return "Input Monitoring"
         case .accessibility: return "Accessibility"
         }
     }
@@ -21,15 +22,13 @@ enum Permission: String, CaseIterable, Identifiable {
     var purpose: String {
         switch self {
         case .microphone: return "Hear you while you hold the dictation key. Nothing is kept or sent otherwise."
-        case .inputMonitoring: return "Notice when you hold the dictation key, whichever app you're in."
-        case .accessibility: return "Type the finished text into the app you're using."
+        case .accessibility: return "Notice when you hold the dictation key, and type the finished text into the app you're using."
         }
     }
 
     var symbol: String {
         switch self {
         case .microphone: return "mic.fill"
-        case .inputMonitoring: return "keyboard.fill"
         case .accessibility: return "text.cursor"
         }
     }
@@ -38,7 +37,7 @@ enum Permission: String, CaseIterable, Identifiable {
     var settingsHint: String? {
         switch self {
         case .microphone: return nil
-        case .inputMonitoring, .accessibility:
+        case .accessibility:
             return "In System Settings, switch on Hushtype in the \(title) list. This window notices as soon as you do."
         }
     }
@@ -46,7 +45,6 @@ enum Permission: String, CaseIterable, Identifiable {
     var isGranted: Bool {
         switch self {
         case .microphone: return AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        case .inputMonitoring: return CGPreflightListenEventAccess()
         case .accessibility: return AXIsProcessTrusted()
         }
     }
@@ -69,10 +67,6 @@ enum Permission: String, CaseIterable, Identifiable {
             default:
                 openSettingsPane()
             }
-        case .inputMonitoring:
-            // Always ask first: the request is what adds Hushtype to the Input Monitoring list. Skipping it
-            // because of an earlier install left the list empty after a reinstall or a permissions reset.
-            if !CGRequestListenEventAccess() { openSettingsPane() }
         case .accessibility:
             // Prompting also adds Hushtype to the Accessibility list, so the user only flips a switch.
             let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
@@ -87,7 +81,6 @@ enum Permission: String, CaseIterable, Identifiable {
         let anchor: String
         switch self {
         case .microphone: anchor = "Privacy_Microphone"
-        case .inputMonitoring: anchor = "Privacy_ListenEvent"
         case .accessibility: anchor = "Privacy_Accessibility"
         }
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") {
@@ -113,7 +106,7 @@ enum Permissions {
         }
     }
 
-    /// Quits and reopens Hushtype. macOS only applies a new Input Monitoring grant to a fresh process.
+    /// Quits and reopens Hushtype. Sometimes macOS only applies a new grant to a fresh process.
     static func relaunch() {
         let path = Bundle.main.bundleURL.path
         let task = Process()
