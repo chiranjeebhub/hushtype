@@ -44,6 +44,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+        window?.makeFirstResponder(nil)
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -89,6 +90,10 @@ struct OnboardingView: View {
         }
         .onDisappear { permissions.stop() }
         .onChange(of: permissions.granted) { permissionsChanged() }
+        .onChange(of: step) {
+            // Don't let a text box on the new step grab focus by itself; the user clicks in when ready.
+            DispatchQueue.main.async { NSApp.keyWindow?.makeFirstResponder(nil) }
+        }
     }
 
     // MARK: Sidebar
