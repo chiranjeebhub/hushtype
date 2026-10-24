@@ -45,7 +45,7 @@ final class DictationController: ObservableObject {
     }
 
     var statusLine: String {
-        if !hotkeyActive { return "Grant Input Monitoring to enable the hotkey" }
+        if !hotkeyActive { return "Finish setup to turn on the dictation key" }
         switch phase {
         case .idle: return "Hold \(settings.triggerKey.displayName) to dictate"
         case .recording: return "Listening…"

@@ -138,3 +138,26 @@ private extension Data {
         (0..<4).reduce(UInt32(0)) { $0 | UInt32(self[offset + $1]) << (8 * UInt32($1)) }
     }
 }
+
+final class APIKeyValidatorTests: XCTestCase {
+    func testRequestsAuthenticateEachService() {
+        let groq = APIKeyValidator.request(for: .groq, key: "k")
+        XCTAssertEqual(groq.url?.host, "api.groq.com")
+        XCTAssertEqual(groq.value(forHTTPHeaderField: "Authorization"), "Bearer k")
+
+        let deepgram = APIKeyValidator.request(for: .deepgram, key: "k")
+        XCTAssertEqual(deepgram.value(forHTTPHeaderField: "Authorization"), "Token k")
+
+        let anthropic = APIKeyValidator.request(for: .anthropic, key: "k")
+        XCTAssertEqual(anthropic.url?.absoluteString, "https://api.anthropic.com/v1/models")
+        XCTAssertEqual(anthropic.value(forHTTPHeaderField: "x-api-key"), "k")
+        XCTAssertNotNil(anthropic.value(forHTTPHeaderField: "anthropic-version"))
+    }
+
+    func testStatusClassification() {
+        XCTAssertEqual(APIKeyValidator.classify(status: 200), .valid)
+        XCTAssertEqual(APIKeyValidator.classify(status: 401), .invalid)
+        XCTAssertEqual(APIKeyValidator.classify(status: 403), .invalid)
+        XCTAssertEqual(APIKeyValidator.classify(status: 503), .unreachable("HTTP 503"))
+    }
+}

@@ -17,18 +17,6 @@ enum TriggerKey: String, CaseIterable, Identifiable {
     }
 }
 
-enum APIService: String, CaseIterable {
-    case groq, deepgram, anthropic
-
-    var displayName: String {
-        switch self {
-        case .groq: return "Groq"
-        case .deepgram: return "Deepgram"
-        case .anthropic: return "Anthropic"
-        }
-    }
-}
-
 /// User preferences in UserDefaults; API keys live in the Keychain.
 @MainActor
 final class SettingsStore: ObservableObject {
@@ -42,6 +30,8 @@ final class SettingsStore: ObservableObject {
     @Published var whisperExecutablePath: String { didSet { defaults.set(whisperExecutablePath, forKey: "whisperExecutablePath") } }
     @Published var whisperModelPath: String { didSet { defaults.set(whisperModelPath, forKey: "whisperModelPath") } }
     @Published var hasCompletedOnboarding: Bool { didSet { defaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding") } }
+    /// Where setup resumes after Hushtype relaunches itself mid-onboarding.
+    @Published var onboardingStep: Int { didSet { defaults.set(onboardingStep, forKey: "onboardingStep") } }
 
     init() {
         triggerKey = TriggerKey(rawValue: defaults.string(forKey: "triggerKey") ?? "") ?? .rightOption
@@ -53,6 +43,7 @@ final class SettingsStore: ObservableObject {
         whisperModelPath = defaults.string(forKey: "whisperModelPath")
             ?? NSString(string: "~/Library/Application Support/Hushtype/models/ggml-large-v3-turbo-q5_0.bin").expandingTildeInPath
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
+        onboardingStep = defaults.integer(forKey: "onboardingStep")
     }
 
     var vocabulary: [String] { DictationPipeline.vocabulary(from: dictionaryText) }
@@ -81,6 +72,20 @@ final class SettingsStore: ObservableObject {
         case .deepgram: return DeepgramTranscriber(apiKey: apiKey(.deepgram))
         case .localWhisper: return LocalWhisperTranscriber(executablePath: whisperExecutablePath, modelPath: whisperModelPath)
         }
+    }
+
+    /// True when the selected speech engine has what it needs (a key, or local files).
+    var engineConfigured: Bool {
+        switch engine {
+        case .groq: return !apiKey(.groq).isEmpty
+        case .deepgram: return !apiKey(.deepgram).isEmpty
+        case .localWhisper: return localWhisperReady
+        }
+    }
+
+    var localWhisperReady: Bool {
+        FileManager.default.isExecutableFile(atPath: whisperExecutablePath)
+            && FileManager.default.fileExists(atPath: whisperModelPath)
     }
 
     func makeCleaner() -> TranscriptCleaner? {
