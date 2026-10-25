@@ -27,7 +27,9 @@ final class AudioRecorder: @unchecked Sendable {
     static let maxRecoveries = 2
     /// How long the audio setup must be quiet after a device change before the mic is reopened.
     static let deviceSettleSeconds: Double = 0.4
-    /// How many times a device change retries opening the mic when it fails or opens unsettled.
+    /// How long a reopened mic gets to deliver its first buffer; Bluetooth mics can be slow.
+    static let firstBufferSeconds: Double = 1.5
+    /// How many times a device change retries opening the mic when it fails or stays silent.
     static let maxDeviceRetries = 4
 
     /// Called on the audio thread with a 0...1 loudness value for the overlay meter.
@@ -48,11 +50,11 @@ final class AudioRecorder: @unchecked Sendable {
     private var configObserver: NSObjectProtocol?
     private var defaultInputListener: AudioObjectPropertyListenerBlock?
     private var pendingDeviceChange: DispatchWorkItem?
+    private var reopenCheck: DispatchWorkItem?
     /// The input device that was the default when the mic opened.
     private var openDevice: AudioDeviceID?
-    /// False when the mic opened at a rate the device isn't running at, which happens when a
-    /// Bluetooth mic is opened before its route has settled. Such a stream may never deliver audio.
-    private var isSettled = true
+    /// Whether any buffer has come from the mic since it was last opened.
+    private var heardSinceOpen = false
     private var watchdog: DispatchWorkItem?
     private let log = Logger(subsystem: "app.hushtype.Hushtype", category: "audio")
     private let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -106,6 +108,7 @@ final class AudioRecorder: @unchecked Sendable {
         lock.withLock {
             self.converter = converter
             lastBufferAt = ProcessInfo.processInfo.systemUptime
+            heardSinceOpen = false
         }
         input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             self?.process(buffer)
@@ -122,7 +125,6 @@ final class AudioRecorder: @unchecked Sendable {
         openDevice = device
         let name = device.map(Self.deviceName) ?? "unknown"
         let deviceRate = device.flatMap(Self.nominalSampleRate)
-        isSettled = deviceRate == nil || deviceRate == inputFormat.sampleRate
         log.info("Mic open on \(name, privacy: .public): \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) ch (device at \(deviceRate ?? 0) Hz)")
     }
 
@@ -227,29 +229,33 @@ final class AudioRecorder: @unchecked Sendable {
     private func handleDeviceChange() {
         // Changes come in bursts while a device connects, and Bluetooth mics change format as
         // they settle. Act once things have been quiet for a moment.
-        scheduleDeviceChange(attempt: 0, reopen: isWarm)
+        scheduleDeviceChange(attempt: 0, reopen: isWarm, force: false)
     }
 
     /// - Parameter reopen: whether the mic was open when the change began, so it should end up open.
-    private func scheduleDeviceChange(attempt: Int, reopen: Bool) {
+    /// - Parameter force: reopen even if the mic looks fine (it was found silent).
+    private func scheduleDeviceChange(attempt: Int, reopen: Bool, force: Bool) {
         pendingDeviceChange?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.applyDeviceChange(attempt: attempt, reopen: reopen) }
+        let work = DispatchWorkItem { [weak self] in
+            self?.applyDeviceChange(attempt: attempt, reopen: reopen, force: force)
+        }
         pendingDeviceChange = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.deviceSettleSeconds, execute: work)
     }
 
-    private func applyDeviceChange(attempt: Int, reopen: Bool) {
+    private func applyDeviceChange(attempt: Int, reopen: Bool, force: Bool) {
         pendingDeviceChange = nil
         let reopen = reopen || isWarm
         let current = Self.defaultInputDevice()
         let sameDevice = isWarm && current != nil && current == openDevice
-        if sameDevice, isSettled, engine.isRunning {
+        if sameDevice, engine.isRunning, !force {
             // Usually the echo of opening the mic ourselves. Nothing to do. (A Bluetooth mic can take
             // a moment to deliver its first buffer, so don't treat that as a stall here; a press
             // and the recording watchdog catch real stalls.)
             return
         }
         log.notice("Audio configuration changed (warm: \(self.isWarm), recording: \(self.isRecording), same device: \(sameDevice), attempt: \(attempt))")
+        reopenCheck?.cancel()
         rebuild()
         if reopen, !isWarm {
             do {
@@ -258,14 +264,31 @@ final class AudioRecorder: @unchecked Sendable {
                 log.error("Mic didn't reopen after the device change")
             }
         }
-        guard reopen, !isWarm || !isSettled else { return }
+        guard reopen else { return }
+        if isWarm {
+            // Opened, but a mic opened mid-switch can stay silent. Check that audio comes through.
+            // (During a recording the recording's own watchdog does this.)
+            let check = DispatchWorkItem { [weak self] in
+                guard let self, self.isWarm, !self.isRecording,
+                      !self.lock.withLock({ self.heardSinceOpen }) else { return }
+                self.log.notice("No audio after reopening the mic")
+                self.retryDeviceChange(attempt: attempt)
+            }
+            reopenCheck = check
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.firstBufferSeconds, execute: check)
+        } else {
+            retryDeviceChange(attempt: attempt)
+        }
+    }
+
+    private func retryDeviceChange(attempt: Int) {
         guard attempt < Self.maxDeviceRetries else {
             // No usable input right now. The next press tries again.
             log.error("Gave up reopening the mic after the device change")
             if isRecording, !isWarm { _ = stop() }
             return
         }
-        scheduleDeviceChange(attempt: attempt + 1, reopen: true)
+        scheduleDeviceChange(attempt: attempt + 1, reopen: true, force: true)
     }
 
     /// The engine doesn't always report the system default moving to another device (AirPods
@@ -318,6 +341,7 @@ final class AudioRecorder: @unchecked Sendable {
     private func process(_ buffer: AVAudioPCMBuffer) {
         let converter = lock.withLock {
             lastBufferAt = ProcessInfo.processInfo.systemUptime
+            heardSinceOpen = true
             return self.converter
         }
         guard let converter, converter.inputFormat == buffer.format else { return }
