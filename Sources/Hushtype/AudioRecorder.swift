@@ -44,6 +44,7 @@ final class AudioRecorder: @unchecked Sendable {
     /// Uptime of the last buffer from the mic, or of opening it if none has come yet.
     private var lastBufferAt: TimeInterval = 0
     private var configObserver: NSObjectProtocol?
+    private var defaultInputListener: AudioObjectPropertyListenerBlock?
     private var pendingDeviceChange: DispatchWorkItem?
     /// The input device the mic is open on, and when opening it finished.
     private var openDevice: AudioDeviceID?
@@ -60,10 +61,16 @@ final class AudioRecorder: @unchecked Sendable {
 
     init() {
         observeConfigurationChanges()
+        observeDefaultInput()
     }
 
     deinit {
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+        if let defaultInputListener {
+            var address = Self.defaultInputAddress
+            AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main,
+                                                   defaultInputListener)
+        }
     }
 
     /// Readies the audio graph without opening the mic, so a cold start is faster.
@@ -255,10 +262,26 @@ final class AudioRecorder: @unchecked Sendable {
         }
     }
 
+    /// The engine is bound to one device, so it no longer reports the system default moving to
+    /// another (AirPods connecting, or the bound mic going away). Watch the default directly.
+    private func observeDefaultInput() {
+        var address = Self.defaultInputAddress
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.handleDeviceChange() }
+        if AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main,
+                                               listener) == noErr {
+            defaultInputListener = listener
+        } else {
+            log.error("Couldn't watch the default input device")
+        }
+    }
+
+    private static let defaultInputAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultInputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain)
+
     private static func defaultInputDevice() -> AudioDeviceID? {
-        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice,
-                                                 mScope: kAudioObjectPropertyScopeGlobal,
-                                                 mElement: kAudioObjectPropertyElementMain)
+        var address = defaultInputAddress
         var device = AudioDeviceID(kAudioObjectUnknown)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
