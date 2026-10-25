@@ -27,6 +27,8 @@ final class AudioRecorder: @unchecked Sendable {
     static let maxRecoveries = 2
     /// How long the audio setup must be quiet after a device change before the mic is reopened.
     static let deviceSettleSeconds: Double = 0.4
+    /// How many times a device change retries opening the mic when it fails or opens unsettled.
+    static let maxDeviceRetries = 4
 
     /// Called on the audio thread with a 0...1 loudness value for the overlay meter.
     var onLevel: (Float) -> Void = { _ in }
@@ -46,9 +48,11 @@ final class AudioRecorder: @unchecked Sendable {
     private var configObserver: NSObjectProtocol?
     private var defaultInputListener: AudioObjectPropertyListenerBlock?
     private var pendingDeviceChange: DispatchWorkItem?
-    /// The input device the mic is open on, and when opening it finished.
+    /// The input device that was the default when the mic opened.
     private var openDevice: AudioDeviceID?
-    private var openedAt: TimeInterval = 0
+    /// False when the mic opened at a rate the device isn't running at, which happens when a
+    /// Bluetooth mic is opened before its route has settled. Such a stream may never deliver audio.
+    private var isSettled = true
     private var watchdog: DispatchWorkItem?
     private let log = Logger(subsystem: "app.hushtype.Hushtype", category: "audio")
     private let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -90,15 +94,9 @@ final class AudioRecorder: @unchecked Sendable {
             rebuild()
             if isWarm { return }
         }
-        let input = engine.inputNode
-        // Bind to the current default input explicitly. Left to itself, a new engine can pick up a
-        // device that is still mid-switch (AirPods change rate as their mic route settles).
+        // A new engine opens whatever is the default input when its input node is first used.
         let device = Self.defaultInputDevice()
-        if var device, let unit = input.audioUnit {
-            let status = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global,
-                                              0, &device, UInt32(MemoryLayout<AudioDeviceID>.size))
-            if status != noErr { log.error("Couldn't select input device \(device): \(status)") }
-        }
+        let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             log.error("No usable input device")
@@ -122,9 +120,10 @@ final class AudioRecorder: @unchecked Sendable {
         }
         isWarm = true
         openDevice = device
-        openedAt = ProcessInfo.processInfo.systemUptime
         let name = device.map(Self.deviceName) ?? "unknown"
-        log.info("Mic open on \(name, privacy: .public): \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) ch")
+        let deviceRate = device.flatMap(Self.nominalSampleRate)
+        isSettled = deviceRate == nil || deviceRate == inputFormat.sampleRate
+        log.info("Mic open on \(name, privacy: .public): \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) ch (device at \(deviceRate ?? 0) Hz)")
     }
 
     /// Closes the mic and drops any buffered idle audio.
@@ -228,42 +227,49 @@ final class AudioRecorder: @unchecked Sendable {
     private func handleDeviceChange() {
         // Changes come in bursts while a device connects, and Bluetooth mics change format as
         // they settle. Act once things have been quiet for a moment.
+        scheduleDeviceChange(attempt: 0, reopen: isWarm)
+    }
+
+    /// - Parameter reopen: whether the mic was open when the change began, so it should end up open.
+    private func scheduleDeviceChange(attempt: Int, reopen: Bool) {
         pendingDeviceChange?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.applyDeviceChange() }
+        let work = DispatchWorkItem { [weak self] in self?.applyDeviceChange(attempt: attempt, reopen: reopen) }
         pendingDeviceChange = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.deviceSettleSeconds, execute: work)
     }
 
-    private func applyDeviceChange() {
+    private func applyDeviceChange(attempt: Int, reopen: Bool) {
         pendingDeviceChange = nil
+        let reopen = reopen || isWarm
         let current = Self.defaultInputDevice()
         let sameDevice = isWarm && current != nil && current == openDevice
-        if sameDevice, engine.isRunning, !isStalled {
-            // Usually the echo of opening the mic ourselves. Nothing to do.
+        if sameDevice, isSettled, engine.isRunning {
+            // Usually the echo of opening the mic ourselves. Nothing to do. (A Bluetooth mic can take
+            // a moment to deliver its first buffer, so don't treat that as a stall here; a press
+            // and the recording watchdog catch real stalls.)
             return
         }
-        log.notice("Audio configuration changed (warm: \(self.isWarm), recording: \(self.isRecording), same device: \(sameDevice))")
-        let tapFormat = lock.withLock { converter?.inputFormat }
-        if sameDevice, ProcessInfo.processInfo.systemUptime - openedAt < 2,
-           engine.inputNode.outputFormat(forBus: 0) == tapFormat {
-            // Opening the mic just stopped it again; restart rather than rebuild, or the two
-            // keep setting each other off.
-            do { try engine.start() } catch { log.error("Couldn't restart the mic: \(error.localizedDescription, privacy: .public)") }
-            return
-        }
-        let wasWarm = isWarm
+        log.notice("Audio configuration changed (warm: \(self.isWarm), recording: \(self.isRecording), same device: \(sameDevice), attempt: \(attempt))")
         rebuild()
-        guard wasWarm, !isWarm else { return }
-        do {
-            try warmUp()
-        } catch {
-            // No usable input right now. The next press tries again.
-            if isRecording { _ = stop() }
+        if reopen, !isWarm {
+            do {
+                try warmUp()
+            } catch {
+                log.error("Mic didn't reopen after the device change")
+            }
         }
+        guard reopen, !isWarm || !isSettled else { return }
+        guard attempt < Self.maxDeviceRetries else {
+            // No usable input right now. The next press tries again.
+            log.error("Gave up reopening the mic after the device change")
+            if isRecording, !isWarm { _ = stop() }
+            return
+        }
+        scheduleDeviceChange(attempt: attempt + 1, reopen: true)
     }
 
-    /// The engine is bound to one device, so it no longer reports the system default moving to
-    /// another (AirPods connecting, or the bound mic going away). Watch the default directly.
+    /// The engine doesn't always report the system default moving to another device (AirPods
+    /// connecting, or the open mic going away), so watch the default directly.
     private func observeDefaultInput() {
         var address = Self.defaultInputAddress
         let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.handleDeviceChange() }
@@ -286,6 +292,16 @@ final class AudioRecorder: @unchecked Sendable {
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
         return status == noErr && device != kAudioObjectUnknown ? device : nil
+    }
+
+    private static func nominalSampleRate(_ device: AudioDeviceID) -> Double? {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var rate: Float64 = 0
+        var size = UInt32(MemoryLayout<Float64>.size)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &rate)
+        return status == noErr && rate > 0 ? rate : nil
     }
 
     private static func deviceName(_ device: AudioDeviceID) -> String {
