@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreAudio
 import os
 
 /// Captures the default microphone, converts it to 16 kHz mono, and hands each buffer to the
@@ -24,6 +25,8 @@ final class AudioRecorder: @unchecked Sendable {
     static let stallSeconds: Double = 0.5
     /// How many times a silent recording rebuilds the engine before giving up.
     static let maxRecoveries = 2
+    /// How long the audio setup must be quiet after a device change before the mic is reopened.
+    static let deviceSettleSeconds: Double = 0.4
 
     /// Called on the audio thread with a 0...1 loudness value for the overlay meter.
     var onLevel: (Float) -> Void = { _ in }
@@ -41,8 +44,10 @@ final class AudioRecorder: @unchecked Sendable {
     /// Uptime of the last buffer from the mic, or of opening it if none has come yet.
     private var lastBufferAt: TimeInterval = 0
     private var configObserver: NSObjectProtocol?
-    private var deviceChangePending = false
-    private var lastRebuildAt: TimeInterval = 0
+    private var pendingDeviceChange: DispatchWorkItem?
+    /// The input device the mic is open on, and when opening it finished.
+    private var openDevice: AudioDeviceID?
+    private var openedAt: TimeInterval = 0
     private var watchdog: DispatchWorkItem?
     private let log = Logger(subsystem: "app.hushtype.Hushtype", category: "audio")
     private let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -72,12 +77,21 @@ final class AudioRecorder: @unchecked Sendable {
     /// stopped delivering audio, it is reopened on a new engine.
     func warmUp() throws {
         if isWarm {
-            guard isStalled else { return }
-            log.notice("Mic stream stalled (engine running: \(self.engine.isRunning)); rebuilding")
+            let moved = Self.defaultInputDevice() != openDevice
+            guard isStalled || moved else { return }
+            log.notice("Mic needs reopening (engine running: \(self.engine.isRunning), default input changed: \(moved))")
             rebuild()
             if isWarm { return }
         }
         let input = engine.inputNode
+        // Bind to the current default input explicitly. Left to itself, a new engine can pick up a
+        // device that is still mid-switch (AirPods change rate as their mic route settles).
+        let device = Self.defaultInputDevice()
+        if var device, let unit = input.audioUnit {
+            let status = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global,
+                                              0, &device, UInt32(MemoryLayout<AudioDeviceID>.size))
+            if status != noErr { log.error("Couldn't select input device \(device): \(status)") }
+        }
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             log.error("No usable input device")
@@ -100,7 +114,10 @@ final class AudioRecorder: @unchecked Sendable {
             throw error
         }
         isWarm = true
-        log.info("Mic open: \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) ch")
+        openDevice = device
+        openedAt = ProcessInfo.processInfo.systemUptime
+        let name = device.map(Self.deviceName) ?? "unknown"
+        log.info("Mic open on \(name, privacy: .public): \(inputFormat.sampleRate) Hz, \(inputFormat.channelCount) ch")
     }
 
     /// Closes the mic and drops any buffered idle audio.
@@ -116,7 +133,6 @@ final class AudioRecorder: @unchecked Sendable {
         if isWarm { closeMic() }
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
         engine = AVAudioEngine()
-        lastRebuildAt = ProcessInfo.processInfo.systemUptime
         observeConfigurationChanges()
         if isRecording {
             do { try warmUp() } catch { log.error("Mic didn't reopen after rebuild") }
@@ -166,6 +182,7 @@ final class AudioRecorder: @unchecked Sendable {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isWarm = false
+        openDevice = nil
         lock.withLock {
             preRoll.removeAll()
             preRollFrames = 0
@@ -202,25 +219,61 @@ final class AudioRecorder: @unchecked Sendable {
     }
 
     private func handleDeviceChange() {
-        // Changes often come in a burst; handle them once.
-        guard !deviceChangePending else { return }
-        deviceChangePending = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.deviceChangePending = false
-            // Opening a new engine can itself report a change; don't answer that with another rebuild.
-            guard ProcessInfo.processInfo.systemUptime - self.lastRebuildAt > 1 || self.isStalled else { return }
-            self.log.notice("Audio configuration changed (warm: \(self.isWarm), recording: \(self.isRecording))")
-            let wasWarm = self.isWarm
-            self.rebuild()
-            guard wasWarm, !self.isWarm else { return }
-            do {
-                try self.warmUp()
-            } catch {
-                // No usable input right now. The next press tries again.
-                if self.isRecording { _ = self.stop() }
-            }
+        // Changes come in bursts while a device connects, and Bluetooth mics change format as
+        // they settle. Act once things have been quiet for a moment.
+        pendingDeviceChange?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.applyDeviceChange() }
+        pendingDeviceChange = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.deviceSettleSeconds, execute: work)
+    }
+
+    private func applyDeviceChange() {
+        pendingDeviceChange = nil
+        let current = Self.defaultInputDevice()
+        let sameDevice = isWarm && current != nil && current == openDevice
+        if sameDevice, engine.isRunning, !isStalled {
+            // Usually the echo of opening the mic ourselves. Nothing to do.
+            return
         }
+        log.notice("Audio configuration changed (warm: \(self.isWarm), recording: \(self.isRecording), same device: \(sameDevice))")
+        let tapFormat = lock.withLock { converter?.inputFormat }
+        if sameDevice, ProcessInfo.processInfo.systemUptime - openedAt < 2,
+           engine.inputNode.outputFormat(forBus: 0) == tapFormat {
+            // Opening the mic just stopped it again; restart rather than rebuild, or the two
+            // keep setting each other off.
+            do { try engine.start() } catch { log.error("Couldn't restart the mic: \(error.localizedDescription, privacy: .public)") }
+            return
+        }
+        let wasWarm = isWarm
+        rebuild()
+        guard wasWarm, !isWarm else { return }
+        do {
+            try warmUp()
+        } catch {
+            // No usable input right now. The next press tries again.
+            if isRecording { _ = stop() }
+        }
+    }
+
+    private static func defaultInputDevice() -> AudioDeviceID? {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var device = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
+        return status == noErr && device != kAudioObjectUnknown ? device : nil
+    }
+
+    private static func deviceName(_ device: AudioDeviceID) -> String {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioObjectPropertyName,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var name: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &name) == noErr,
+              let name else { return "device \(device)" }
+        return name.takeRetainedValue() as String
     }
 
     private func process(_ buffer: AVAudioPCMBuffer) {
