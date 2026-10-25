@@ -63,6 +63,9 @@ final class DictationController: ObservableObject {
         hotkey.onCommand = { [weak self] in Task { @MainActor in self?.switchToCommand() } }
         hotkey.onLock = { [weak self] in Task { @MainActor in self?.lockHandsFree() } }
         recorder.onLevel = { [weak self] value in Task { @MainActor in self?.level = value } }
+        recorder.onNoAudio = { [weak self] in
+            MainActor.assumeIsolated { self?.micStoppedResponding() }
+        }
         observeSleepAndLock()
         if settings.keepHistory { history = HistoryStore.load() }
         pasteLastShortcut = GlobalShortcut(keyCode: kVK_ANSI_V, modifiers: controlKey | cmdKey) { [weak self] in
@@ -143,8 +146,17 @@ final class DictationController: ObservableObject {
             if phase == .recording { cancelRecording() }
             recorder.coolDown()
         } else {
+            // The old engine can still point at a mic that changed while the Mac slept.
+            if phase != .recording { recorder.rebuild() }
             applyMicMode()
         }
+    }
+
+    /// The mic gave no audio even after the recorder reopened it.
+    private func micStoppedResponding() {
+        guard phase == .recording else { return }
+        cancelRecording()
+        show(error: "Hushtype can't hear your microphone. Check the input in System Settings › Sound.")
     }
 
     /// Downloads the on-device speech model in the background if this language doesn't have it yet.
