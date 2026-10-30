@@ -16,6 +16,9 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
+      - name: Build HushtypeCore for iOS
+        # The iPhone and iPad keyboard depends on HushtypeCore; keep it building there.
+        run: xcodebuild build -scheme HushtypeCore -destination 'generic/platform=iOS' -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO
       - name: Package app bundle
         run: scripts/build-app.sh release
       - name: Zip app

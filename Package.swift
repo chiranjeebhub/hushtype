@@ -3,8 +3,9 @@ import PackageDescription
 
 let package = Package(
     name: "Hushtype",
-    // SpeechAnalyzer, the on-device transcriber, ships with macOS 26.
-    platforms: [.macOS(.v26)],
+    // SpeechAnalyzer, the on-device transcriber, ships with macOS 26 and iOS 26. HushtypeCore is
+    // shared with the iPhone and iPad keyboard (chiranjeebhub/hushtype-keyboard).
+    platforms: [.macOS(.v26), .iOS(.v26)],
     products: [
         .executable(name: "Hushtype", targets: ["Hushtype"]),
         .library(name: "HushtypeCore", targets: ["HushtypeCore"]),
