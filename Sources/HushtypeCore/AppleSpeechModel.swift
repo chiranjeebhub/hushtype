@@ -13,7 +13,7 @@ public struct TranscriptionOptions: Equatable, Sendable {
     }
 }
 
-/// The on-device speech model macOS downloads once per language.
+/// The on-device speech model the system downloads once per language.
 public enum AppleSpeechModel {
     public enum Status: Equatable, Sendable {
         case unsupported
