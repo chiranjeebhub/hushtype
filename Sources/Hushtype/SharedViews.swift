@@ -348,7 +348,7 @@ extension CleanupEngine {
 
     var tagline: String {
         switch self {
-        case .onDevice: return "Apple Intelligence. Free and offline."
+        case .onDevice: return "Apple Intelligence. Free, offline."
         case .claude: return "Best quality. Your Anthropic key."
         }
     }
@@ -397,7 +397,8 @@ struct PolishEnginePicker: View {
                         Text(engine.tagline)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                 }
