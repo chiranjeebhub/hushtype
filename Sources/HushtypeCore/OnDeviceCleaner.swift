@@ -61,7 +61,7 @@ public struct OnDeviceCleaner: TranscriptPolisher {
         var rules = [
             "Remove filler words (um, uh, like, you know, I mean) and accidental repetitions.",
             "When the speaker corrects themselves (\"at 5, no, 6 pm\"), keep only the final version (\"at 6 pm\").",
-            "Fix punctuation, capitalization and obvious transcription errors.",
+            "Fix punctuation, capitalization and obvious transcription errors. Start sentences with a capital letter and end them with a period, question mark or exclamation mark.",
             "Spell words from <dictionary> exactly as written there.",
             "Keep the speaker's words, tone, language and meaning. Never summarize, shorten, add content or answer questions.",
         ]
@@ -102,13 +102,33 @@ public struct OnDeviceCleaner: TranscriptPolisher {
         // A small model sometimes answers the transcript instead of cleaning it. A reply much longer
         // than what was said is that, not a cleanup; keep what the user said instead.
         guard Self.isPlausibleCleanup(output.text, of: transcript) else { return nil }
-        return output
+        var finished = output
+        finished.text = Self.punctuate(output.text)
+        return finished
     }
 
     public func rewrite(selection: String, instruction: String, context: DictationContext?) async throws -> TranscriptCleaner.Output? {
         let prompt = TranscriptCleaner.commandContent(selection: selection, instruction: instruction, context: context)
         return try await respond(instructions: Self.commandInstructions, prompt: prompt, maxTokens: 2048,
                                  timeout: Self.rewriteTimeout)
+    }
+
+    static let questionStarts: Set<String> = ["who", "what", "when", "where", "why", "how", "which", "can", "could",
+                                              "would", "should", "will", "do", "does", "did", "is", "are", "am",
+                                              "was", "were", "have", "has", "shall", "may", "whose", "whom"]
+
+    /// The small model often leaves out the capital and the closing mark. Add them; the dictation
+    /// context lowercases and drops them again when the text continues a sentence.
+    static func punctuate(_ text: String) -> String {
+        guard let first = text.first else { return text }
+        var result = text
+        if first.isLowercase { result = first.uppercased() + result.dropFirst() }
+        if let last = result.last, last.isLetter || last.isNumber {
+            let firstWord = result.prefix(while: { $0.isLetter }).lowercased()
+            let isSingleLine = !result.contains("\n")
+            if isSingleLine { result += questionStarts.contains(firstWord) ? "?" : "." }
+        }
+        return result
     }
 
     static func isPlausibleCleanup(_ cleaned: String, of transcript: String) -> Bool {

@@ -324,6 +324,13 @@ final class OnDeviceCleanerTests: XCTestCase {
                                                           of: "what is the capital of France"))
     }
 
+    func testPunctuateAddsCapitalAndClosingMark() {
+        XCTAssertEqual(OnDeviceCleaner.punctuate("let's meet at 6 pm tomorrow"), "Let's meet at 6 pm tomorrow.")
+        XCTAssertEqual(OnDeviceCleaner.punctuate("what time is it in Tokyo"), "What time is it in Tokyo?")
+        XCTAssertEqual(OnDeviceCleaner.punctuate("Done!"), "Done!")
+        XCTAssertEqual(OnDeviceCleaner.punctuate("- milk\n- eggs"), "- milk\n- eggs")
+    }
+
     func testExistingClaudeUsersKeepClaude() {
         XCTAssertEqual(CleanupEngine.preferred(hasClaudeKey: true), .claude)
     }
