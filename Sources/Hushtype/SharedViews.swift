@@ -274,53 +274,208 @@ struct APIKeyField: View {
 
 // MARK: - Polishing
 
-/// The Claude polishing switch with a before/after example and its key.
+/// Setup's polish step: a before/after, where polishing runs, and Claude's key when that's chosen.
+/// Turning polishing off is the step's "Skip" button, so there's no switch here.
 struct PolishCard: View {
     @ObservedObject var settings: SettingsStore
+    @State private var availability = OnDeviceCleaner.availability
 
     var body: some View {
-        Card(highlighted: settings.cleanupEnabled) {
-            VStack(alignment: .leading, spacing: 14) {
-                Toggle(isOn: $settings.cleanupEnabled.animation(.easeInOut(duration: 0.2))) {
-                    HStack(spacing: 12) {
-                        IconTile(symbol: "sparkles", color: .pink, size: 32)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Polish with Claude").font(.body.weight(.semibold))
-                            Text("Removes filler words, fixes punctuation, applies your corrections.")
-                                .font(.callout).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 16)
-                    }
-                }
-                .toggleStyle(.switch)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                example("You say", "um so let's meet at 5, no wait, 6 pm tomorrow", lit: false)
+                Icon("arrow.right", size: 14).foregroundStyle(Color.hushViolet)
+                example("Hushtype types", "Let's meet at 6 pm tomorrow.", lit: true)
+            }
+            .fixedSize(horizontal: false, vertical: true)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    example("You say", "um so let's meet at 5, no wait, 6 pm tomorrow", muted: true)
-                    example("Hushtype types", settings.cleanupEnabled
-                            ? "Let's meet at 6 pm tomorrow."
-                            : "um so let's meet at 5, no wait, 6 pm tomorrow", muted: false)
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+            PolishEnginePicker(settings: settings)
 
-                if settings.cleanupEnabled {
-                    APIKeyField(service: .anthropic, settings: settings)
-                        .transition(.opacity)
+            switch settings.cleanupEngine {
+            case .claude:
+                APIKeyField(service: .anthropic, settings: settings)
+                    .transition(.opacity)
+            case .onDevice:
+                if availability != .available {
+                    OnDeviceStatus().transition(.opacity)
                 }
+            }
+        }
+        .onAppear { settings.cleanupEnabled = true }
+        .task {
+            while !Task.isCancelled {
+                let now = OnDeviceCleaner.availability
+                if now != availability { withAnimation(.easeInOut(duration: 0.2)) { availability = now } }
+                try? await Task.sleep(for: .seconds(2))
             }
         }
     }
 
-    private func example(_ label: String, _ text: String, muted: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 96, alignment: .leading)
+    private func example(_ label: String, _ text: String, lit: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
             Text(text)
                 .font(.callout)
-                .foregroundStyle(muted ? .secondary : .primary)
+                .foregroundStyle(lit ? .primary : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(shape.fill(lit ? Color.hushViolet.opacity(0.08) : Color.primary.opacity(0.04)))
+        .overlay(shape.strokeBorder(lit ? Color.hushViolet.opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 0.5))
+    }
+}
+
+extension CleanupEngine {
+    var symbol: String {
+        switch self {
+        case .onDevice: return "macwindow"
+        case .claude: return "sparkles"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .onDevice: return "On this Mac"
+        case .claude: return "Claude"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .onDevice: return "Apple Intelligence. Free, offline."
+        case .claude: return "Best quality. Your Anthropic key."
+        }
+    }
+}
+
+/// Two tiles to pick where polishing runs: on this Mac or with Claude.
+struct PolishEnginePicker: View {
+    @ObservedObject var settings: SettingsStore
+    @State private var availability = OnDeviceCleaner.availability
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(CleanupEngine.allCases) { engine in
+                tile(engine)
+            }
+        }
+        .task {
+            // Apple Intelligence can finish downloading or be turned on while this is open.
+            while !Task.isCancelled {
+                availability = OnDeviceCleaner.availability
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    private var warningText: String {
+        switch availability {
+        case .downloading: return "Getting ready"
+        case .turnedOff: return "Turn on Apple Intelligence"
+        case .unsupported: return "Not on this Mac"
+        default: return "Not available right now"
+        }
+    }
+
+    private func tile(_ engine: CleanupEngine) -> some View {
+        let selected = settings.cleanupEngine == engine
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) { settings.cleanupEngine = engine }
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Glyph(symbol: engine.symbol)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(engine.title).font(.callout.weight(.semibold))
+                        Text(engine.tagline)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                status(engine)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(shape.fill(selected ? Color.hushViolet.opacity(0.08) : Color.primary.opacity(0.035)))
+            .overlay(shape.strokeBorder(selected ? Color.hushViolet.opacity(0.7) : Color.primary.opacity(0.08),
+                                        lineWidth: selected ? 1 : 0.5))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// One quiet line on whether the engine can run right now.
+    private func status(_ engine: CleanupEngine) -> some View {
+        let (text, color): (String, Color) = {
+            switch engine {
+            case .onDevice:
+                return availability == .available ? ("Ready", .hushMint) : (warningText, .orange)
+            case .claude:
+                return settings.apiKey(.anthropic).isEmpty ? ("Needs an API key", .secondary) : ("Key saved", .hushMint)
+            }
+        }()
+        return HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text).font(.caption.weight(.medium)).foregroundStyle(color == .secondary ? Color.secondary : color)
+        }
+        .padding(.leading, 2)
+    }
+}
+
+/// Whether Apple Intelligence is ready, and how to turn it on when it isn't.
+struct OnDeviceStatus: View {
+    @State private var availability = OnDeviceCleaner.availability
+
+    private var title: String {
+        switch availability {
+        case .downloading: return "Apple Intelligence is getting ready"
+        case .turnedOff: return "Apple Intelligence is off"
+        case .unsupported: return "Not available on this Mac"
+        default: return "Apple Intelligence isn't available"
+        }
+    }
+
+    static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.Siri-Settings.extension")!
+
+    var body: some View {
+        Group {
+            if availability == .available {
+                HStack(spacing: 12) {
+                    Glyph(symbol: "lock")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Polishing on this Mac").fontWeight(.medium)
+                        Text("Apple Intelligence cleans up your words. Nothing leaves your Mac.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 12)
+                    StatusPill(text: "Ready")
+                }
+            } else {
+                Callout(symbol: "warn", tint: .orange, title: title,
+                        message: availability.explanation ?? "") {
+                    if availability == .turnedOff || availability == .downloading {
+                        Button("Open Settings") { NSWorkspace.shared.open(Self.settingsURL) }
+                    }
+                }
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                let now = OnDeviceCleaner.availability
+                if now != availability { withAnimation(.easeInOut(duration: 0.2)) { availability = now } }
+                try? await Task.sleep(for: .seconds(2))
+            }
         }
     }
 }

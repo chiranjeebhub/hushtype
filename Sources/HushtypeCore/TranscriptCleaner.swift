@@ -106,22 +106,34 @@ public struct TranscriptCleaner: Sendable {
 
     func makeRequest(transcript: String, vocabulary: [String], context: DictationContext? = nil,
                      keepVerbatim: [String] = []) throws -> URLRequest {
-        let dictionary = vocabulary.isEmpty ? "(empty)" : vocabulary.joined(separator: "\n")
-        var content = Self.contextBlock(context)
-        content += "<dictionary>\n\(dictionary)\n</dictionary>\n\n"
-        if !keepVerbatim.isEmpty {
-            content += "<keep_verbatim>\n\(keepVerbatim.joined(separator: "\n"))\n</keep_verbatim>\n\n"
-        }
-        content += "<transcript>\n\(transcript)\n</transcript>"
+        let content = Self.cleanupContent(transcript: transcript, vocabulary: vocabulary, context: context,
+                                          keepVerbatim: keepVerbatim)
         // Roughly 4 characters per token; leave room for formatting, but stop a runaway reply.
         let maxTokens = min(4096, transcript.count / 2 + 256)
         return try request(system: Self.systemPrompt, content: content, maxTokens: maxTokens, timeout: 20)
     }
 
     func makeCommandRequest(selection: String, instruction: String, context: DictationContext?) throws -> URLRequest {
-        var content = Self.contextBlock(context)
-        content += "<selection>\n\(selection)\n</selection>\n\n<instruction>\n\(instruction)\n</instruction>"
+        let content = Self.commandContent(selection: selection, instruction: instruction, context: context)
         return try request(system: Self.commandPrompt, content: content, maxTokens: 8192, timeout: 60)
+    }
+
+    /// The user message for a cleanup, shared by Claude and the on-device model.
+    static func cleanupContent(transcript: String, vocabulary: [String], context: DictationContext?,
+                               keepVerbatim: [String]) -> String {
+        let dictionary = vocabulary.isEmpty ? "(empty)" : vocabulary.joined(separator: "\n")
+        var content = contextBlock(context)
+        content += "<dictionary>\n\(dictionary)\n</dictionary>\n\n"
+        if !keepVerbatim.isEmpty {
+            content += "<keep_verbatim>\n\(keepVerbatim.joined(separator: "\n"))\n</keep_verbatim>\n\n"
+        }
+        content += "<transcript>\n\(transcript)\n</transcript>"
+        return content
+    }
+
+    /// The user message for a spoken command, shared by Claude and the on-device model.
+    static func commandContent(selection: String, instruction: String, context: DictationContext?) -> String {
+        contextBlock(context) + "<selection>\n\(selection)\n</selection>\n\n<instruction>\n\(instruction)\n</instruction>"
     }
 
     static func contextBlock(_ context: DictationContext?) -> String {

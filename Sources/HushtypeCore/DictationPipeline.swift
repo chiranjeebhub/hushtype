@@ -4,9 +4,9 @@ import Foundation
 public struct DictationTimings: Codable, Equatable, Sendable {
     /// Release → final transcript from the on-device transcriber.
     public var transcribe: TimeInterval
-    /// Claude request → first word of the reply, when Claude ran.
+    /// Claude request → first word of the reply, when Claude ran (the on-device model has none).
     public var polishFirstToken: TimeInterval?
-    /// Claude request → end of the reply, when Claude ran.
+    /// Polish request → end of the reply, when Claude or the on-device model ran.
     public var polish: TimeInterval?
     /// Release → text ready to paste.
     public var total: TimeInterval
@@ -33,7 +33,7 @@ public struct DictationResult: Identifiable, Equatable, Codable, Sendable {
     public let timings: DictationTimings
     public var kind: Kind
     public var appName: String?
-    /// Why Claude's version wasn't used, when it wasn't ("timed out", an error message).
+    /// Why the polished version wasn't used, when it wasn't ("timed out", an error message).
     public var fallbackReason: String?
 
     public init(id: UUID = UUID(), raw: String, cleaned: String, date: Date = Date(), timings: DictationTimings,
@@ -56,12 +56,12 @@ public struct DictationResult: Identifiable, Equatable, Codable, Sendable {
 
 /// Transcript in, polished text out. Transcription itself happens live while the key is held.
 public struct DictationPipeline: Sendable {
-    let cleaner: TranscriptCleaner?
+    let cleaner: (any TranscriptPolisher)?
     let vocabulary: [String]
     let context: DictationContext?
     let snippets: [Snippet]
 
-    public init(cleaner: TranscriptCleaner?, vocabulary: [String], context: DictationContext? = nil,
+    public init(cleaner: (any TranscriptPolisher)?, vocabulary: [String], context: DictationContext? = nil,
                 snippets: [Snippet] = []) {
         self.cleaner = cleaner
         self.vocabulary = vocabulary
@@ -72,7 +72,7 @@ public struct DictationPipeline: Sendable {
     /// - Parameters:
     ///   - releasedAt: when the key was released.
     ///   - transcribedAt: when the final transcript arrived; defaults to now.
-    ///   - onCleanupStart: called when Claude polishing begins (skipped for short, clean phrases).
+    ///   - onCleanupStart: called when polishing begins (skipped for short, clean phrases).
     public func polish(_ transcript: String, releasedAt start: Date, transcribedAt: Date = Date(),
                        onCleanupStart: @Sendable () -> Void = {}) async throws -> DictationResult {
         let raw = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -97,11 +97,12 @@ public struct DictationPipeline: Sendable {
                 if let output = try await cleaner.clean(raw, vocabulary: vocabulary, context: context,
                                                         keepVerbatim: snippets.map(\.trigger)) {
                     cleaned = output.text
-                    firstToken = output.firstToken
+                    // The on-device model replies all at once, so it has no separate first word.
+                    firstToken = cleaner.engine == .claude ? output.firstToken : nil
                     polishTime = output.total
                 }
             } catch is TranscriptCleaner.Timeout {
-                fallbackReason = "Claude was slow, so the transcript was inserted as heard."
+                fallbackReason = "\(cleaner.engine.serviceName) was slow, so the transcript was inserted as heard."
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
@@ -125,10 +126,10 @@ public struct DictationPipeline: Sendable {
         guard !spoken.isEmpty else { throw HushtypeError.noSpeech }
         guard let cleaner else { throw HushtypeError.missingAPIKey("Anthropic") }
         guard let output = try await cleaner.rewrite(selection: selection, instruction: spoken, context: context) else {
-            throw HushtypeError.badResponse("Claude didn't return any text for that command.")
+            throw HushtypeError.badResponse("\(cleaner.engine.serviceName) didn't return any text for that command.")
         }
         let timings = DictationTimings(transcribe: transcribedAt.timeIntervalSince(start),
-                                       polishFirstToken: output.firstToken, polish: output.total,
+                                       polishFirstToken: cleaner.engine == .claude ? output.firstToken : nil, polish: output.total,
                                        total: Date().timeIntervalSince(start))
         return DictationResult(raw: spoken, cleaned: output.text, timings: timings, kind: .command,
                                appName: context?.appName)

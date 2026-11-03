@@ -14,7 +14,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .home: return "Home"
         case .dictation: return "Dictation"
-        case .claude: return "Claude Polish"
+        case .claude: return "Polish"
         case .dictionary: return "Dictionary"
         case .snippets: return "Snippets"
         case .history: return "History"
@@ -27,7 +27,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .home: return "Whether Hushtype is ready, and what you've dictated lately."
         case .dictation: return "Choose the key you hold to talk, and how Hushtype listens."
-        case .claude: return "Claude cleans up what you said before it's typed. Only text leaves your Mac."
+        case .claude: return "Hushtype cleans up what you said before it's typed, on this Mac or with Claude."
         case .dictionary: return "Names and terms Hushtype should always spell your way."
         case .snippets: return "Say a phrase, and Hushtype types your saved text exactly as written."
         case .history: return "Your recent dictations, saved only on this Mac."
@@ -63,7 +63,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .home: return ["status", "ready", "overview", "recent"]
         case .dictation: return ["key", "hotkey", "fn", "option", "hands-free", "language", "sound", "microphone", "mic", "shortcut", "command"]
-        case .claude: return ["polish", "api key", "anthropic", "context", "app", "privacy", "speed", "latency"]
+        case .claude: return ["claude", "polish", "api key", "anthropic", "on-device", "apple intelligence", "offline", "context", "app", "privacy", "speed", "latency"]
         case .dictionary: return ["words", "vocabulary", "names", "spelling", "learn", "corrections"]
         case .snippets: return ["shortcut", "expand", "text", "phrase"]
         case .history: return ["recent", "copy", "paste last", "search"]
@@ -520,7 +520,7 @@ private struct HomePane: View {
                     .font(.system(size: 22, weight: .semibold))
                     .tracking(-0.4)
                 Text(ready
-                     ? "Let go and your words appear wherever you're typing\(settings.cleanupEnabled ? ", polished by Claude" : "")."
+                     ? "Let go and your words appear wherever you're typing\(polishPhrase)."
                      : "Hushtype still needs a permission before the dictation key works.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -546,6 +546,11 @@ private struct HomePane: View {
             .fill(LinearGradient(colors: [Color.hushViolet.opacity(0.20), Color.hushMint.opacity(0.08), Color.primary.opacity(0.02)],
                                  startPoint: .topLeading, endPoint: .bottomTrailing)))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+    }
+
+    private var polishPhrase: String {
+        guard settings.cleanupEnabled else { return "" }
+        return settings.cleanupEngine == .onDevice ? ", polished right on this Mac" : ", polished by Claude"
     }
 
     private func pill<Leading: View, Content: View>(@ViewBuilder icon: () -> Leading, @ViewBuilder label: () -> Content) -> some View {
@@ -750,31 +755,47 @@ private struct ClaudePane: View {
         SettingsPage(pane: .claude) {
             PolishHero(settings: settings)
 
-            SectionLabel("Connection")
+            if settings.cleanupEnabled {
+                SectionLabel("Engine")
+                PolishEnginePicker(settings: settings)
+            }
+
+            SectionLabel(settings.cleanupEngine == .claude ? "Connection" : "On this Mac")
             SettingsCard {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 12) {
-                        Glyph(symbol: "key")
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Anthropic API key").fontWeight(.medium)
-                            Text(settings.iCloudSync && settings.syncAPIKey
-                                 ? "Saved in iCloud Keychain. Command mode uses it too."
-                                 : "Saved in your Keychain. Command mode uses it too.")
-                                .font(.caption).foregroundStyle(.secondary)
+                switch settings.cleanupEngine {
+                case .claude:
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 12) {
+                            Glyph(symbol: "key")
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Anthropic API key").fontWeight(.medium)
+                                Text(settings.iCloudSync && settings.syncAPIKey
+                                     ? "Saved in iCloud Keychain. Command mode uses it too."
+                                     : "Saved in your Keychain. Command mode uses it too.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                         }
+                        APIKeyField(service: .anthropic, settings: settings)
                     }
-                    APIKeyField(service: .anthropic, settings: settings)
+                    .padding(16)
+                case .onDevice:
+                    OnDeviceStatus().padding(16)
                 }
-                .padding(16)
                 ToggleRow(title: "Match the app you're in",
                           subtitle: "Casual in Slack, careful in Mail. Spells names already on screen.",
                           symbol: "macwindow",
-                          info: "Sends the app's name and the text around your cursor with the transcript, so Claude matches the tone and spells names already on screen. Password fields are never read.",
+                          info: settings.cleanupEngine == .claude
+                              ? "Sends the app's name and the text around your cursor with the transcript, so Claude matches the tone and spells names already on screen. Password fields are never read."
+                              : "Gives the on-device model the app's name and the text around your cursor, so it matches the tone and spells names already on screen. It never leaves your Mac, and password fields are never read.",
                           isOn: $settings.useContext)
             }
             HStack(spacing: 10) {
                 trust("lock", "Voice stays here", "Speech is transcribed on this Mac. Audio is never uploaded.")
-                trust("icloud", "Only text is sent", "Straight to Anthropic, with your own key.")
+                if settings.cleanupEngine == .claude {
+                    trust("icloud", "Only text is sent", "Straight to Anthropic, with your own key.")
+                } else {
+                    trust("lock.shield", "Text stays here too", "Apple Intelligence polishes it on this Mac, even offline.")
+                }
                 trust("lock.shield", "Passwords skipped", "Secure fields are never read for context.")
             }
             .padding(.top, 10)
@@ -811,12 +832,12 @@ private struct PolishHero: View {
             HStack(spacing: 12) {
                 Glyph(symbol: "sparkles", brand: true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Polish with Claude").fontWeight(.semibold)
+                    Text(settings.cleanupEngine == .claude ? "Polish with Claude" : "Polish on this Mac").fontWeight(.semibold)
                     Text("Removes filler words, fixes punctuation, applies your corrections.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 12)
-                Toggle("Polish with Claude", isOn: $settings.cleanupEnabled.animation(.easeInOut(duration: 0.2)))
+                Toggle("Polish", isOn: $settings.cleanupEnabled.animation(.easeInOut(duration: 0.2)))
                     .toggleStyle(.switch)
                     .labelsHidden()
             }
@@ -928,6 +949,9 @@ private struct SpeedCard: View {
         if let first = t.polishFirstToken, let polish = t.polish {
             parts.append(Segment(id: "Claude's first word", seconds: first, color: .hushViolet))
             parts.append(Segment(id: "Claude done", seconds: max(0, polish - first), color: .hushMint))
+        } else if let polish = t.polish {
+            // On-device polishing replies all at once.
+            parts.append(Segment(id: "Polish on this Mac", seconds: polish, color: .hushMint))
         }
         return parts
     }
@@ -1332,7 +1356,7 @@ private struct GeneralPane: View {
         SettingsPage(pane: .general) {
             SettingsCard {
                 ToggleRow(title: "Open Hushtype at login", symbol: "power", isOn: $launchAtLogin)
-                SettingsRow(title: "Setup assistant", subtitle: "Walk through permissions, your key and Claude again.",
+                SettingsRow(title: "Setup assistant", subtitle: "Walk through permissions and polishing again.",
                             symbol: "wand.and.stars") {
                     Button("Run Setup Again…", action: runSetup)
                 }

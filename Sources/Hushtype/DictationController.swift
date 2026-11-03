@@ -325,7 +325,7 @@ final class DictationController: ObservableObject {
                             releasedAt: Date) {
         guard let assistant = settings.makeAssistant() else {
             session.cancel()
-            return show(error: "Add your Anthropic key in Settings to use commands.")
+            return show(error: "Add your Anthropic key in Settings to use commands, or switch polishing to on-device.")
         }
         let vocabulary = settings.vocabulary
         pipelineTask = Task {
