@@ -59,9 +59,9 @@ public struct OnDeviceCleaner: TranscriptPolisher {
     /// blocks the prompt doesn't have are left out, or the small model starts echoing those tags.
     static func instructions(hasCursorText: Bool, hasKeepVerbatim: Bool) -> String {
         var rules = [
-            "Remove filler words (um, uh, like, you know, I mean) and accidental repetitions.",
+            "Remove filler words (um, uh, so, like, you know, I mean) and accidental repetitions.",
             "When the speaker corrects themselves (\"at 5, no, 6 pm\"), keep only the final version (\"at 6 pm\").",
-            "Fix punctuation, capitalization and obvious transcription errors. Start sentences with a capital letter and end them with a period, question mark or exclamation mark.",
+            "Fix punctuation, capitalization and obvious transcription errors. Start sentences with a capital letter. End a statement with a period and a question with a question mark; use an exclamation mark only when the speaker clearly exclaims. Capitalize names, places, days and months (Friday, Tokyo).",
             "Spell words from <dictionary> exactly as written there.",
             "Keep the speaker's words, tone, language and meaning. Never summarize, shorten, add content or answer questions.",
         ]
