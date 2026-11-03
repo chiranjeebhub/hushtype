@@ -309,3 +309,39 @@ final class HushtypeErrorTests: XCTestCase {
                        "Anthropic returned HTTP 404.")
     }
 }
+
+final class OnDeviceCleanerTests: XCTestCase {
+    func testUnwrapStripsTags() {
+        XCTAssertEqual(OnDeviceCleaner.unwrap("  <transcript>\nHello there.\n</transcript> "), "Hello there.")
+        XCTAssertEqual(OnDeviceCleaner.unwrap("Plain text."), "Plain text.")
+    }
+
+    func testAnswersAreNotCleanups() {
+        XCTAssertTrue(OnDeviceCleaner.isPlausibleCleanup("Let's meet at 6 pm tomorrow.",
+                                                         of: "um so let's meet at 5, no wait, 6 pm tomorrow"))
+        XCTAssertFalse(OnDeviceCleaner.isPlausibleCleanup(String(repeating: "An answer to the question. ", count: 10),
+                                                          of: "what is the capital of France"))
+    }
+
+    func testExistingClaudeUsersKeepClaude() {
+        XCTAssertEqual(CleanupEngine.preferred(hasClaudeKey: true), .claude)
+    }
+
+    /// Runs the real on-device model where Apple Intelligence is on; skipped elsewhere (CI).
+    func testOnDeviceCleanupWhenAvailable() async throws {
+        try XCTSkipUnless(OnDeviceCleaner.availability == .available, "Apple Intelligence isn't available here")
+        let cleaner = OnDeviceCleaner()
+        let samples = [
+            "um so let's meet at 5, no wait, 6 pm tomorrow",
+            "can you uh can you send me the the report by friday",
+            "what time is it in tokyo right now",
+        ]
+        for sample in samples {
+            let output = try await cleaner.clean(sample, vocabulary: ["Hushtype"])
+            print("ON-DEVICE \(String(format: "%.2f", output?.total ?? 0))s: \(sample) -> \(output?.text ?? "(nil)")")
+        }
+        let meeting = try await cleaner.clean(samples[0], vocabulary: [])
+        XCTAssertTrue(meeting?.text.contains("6") ?? false)
+        XCTAssertFalse(meeting?.text.lowercased().contains("um") ?? true)
+    }
+}

@@ -25,6 +25,9 @@ final class SettingsStore: ObservableObject {
     @Published var triggerKey: TriggerKey { didSet { defaults.set(triggerKey.rawValue, forKey: "triggerKey") } }
     @Published var language: String { didSet { defaults.set(language, forKey: "language") } }
     @Published var cleanupEnabled: Bool { didSet { defaults.set(cleanupEnabled, forKey: "cleanupEnabled") } }
+    /// Polish on this Mac with Apple Intelligence, or with Claude. Kept per Mac, since whether
+    /// Apple Intelligence can run depends on the Mac.
+    @Published var cleanupEngine: CleanupEngine { didSet { defaults.set(cleanupEngine.rawValue, forKey: "cleanupEngine") } }
     @Published var dictionaryText: String { didSet { defaults.set(dictionaryText, forKey: "dictionary") } }
     @Published var soundsEnabled: Bool { didSet { defaults.set(soundsEnabled, forKey: "soundsEnabled") } }
     /// Keep the mic open all the time so dictation starts instantly and catches the first word.
@@ -53,6 +56,7 @@ final class SettingsStore: ObservableObject {
         triggerKey = TriggerKey(rawValue: defaults.string(forKey: "triggerKey") ?? "") ?? .rightOption
         language = defaults.string(forKey: "language") ?? "en"
         cleanupEnabled = defaults.object(forKey: "cleanupEnabled") as? Bool ?? true
+        cleanupEngine = CleanupEngine(rawValue: defaults.string(forKey: "cleanupEngine") ?? "") ?? .claude
         dictionaryText = defaults.string(forKey: "dictionary") ?? ""
         soundsEnabled = defaults.object(forKey: "soundsEnabled") as? Bool ?? true
         alwaysReadyMic = defaults.bool(forKey: "alwaysReadyMic")
@@ -65,6 +69,11 @@ final class SettingsStore: ObservableObject {
         syncAPIKey = defaults.bool(forKey: "syncAPIKey")
         hasCompletedOnboarding = defaults.bool(forKey: "hasCompletedOnboarding")
         onboardingStep = defaults.integer(forKey: "onboardingStep")
+        if defaults.string(forKey: "cleanupEngine") == nil {
+            // First run of a version with the choice: people who already use Claude keep it,
+            // everyone else starts on-device when this Mac supports it.
+            cleanupEngine = .preferred(hasClaudeKey: !apiKey(.anthropic).isEmpty)
+        }
     }
 
     var vocabulary: [String] { DictationPipeline.vocabulary(from: dictionaryText) }
@@ -115,15 +124,31 @@ final class SettingsStore: ObservableObject {
         return true
     }
 
-    /// Command mode always needs Claude, even with polishing turned off.
-    func makeAssistant() -> TranscriptCleaner? {
-        let key = apiKey(.anthropic)
-        return key.isEmpty ? nil : TranscriptCleaner(apiKey: key)
+    /// Command mode uses the chosen engine even with polishing turned off. Nil when Claude is
+    /// chosen and there's no key.
+    func makeAssistant() -> (any TranscriptPolisher)? {
+        switch cleanupEngine {
+        case .onDevice:
+            return OnDeviceCleaner()
+        case .claude:
+            let key = apiKey(.anthropic)
+            return key.isEmpty ? nil : TranscriptCleaner(apiKey: key)
+        }
     }
 
-    func makeCleaner() -> TranscriptCleaner? {
-        let key = apiKey(.anthropic)
-        guard cleanupEnabled, !key.isEmpty else { return nil }
-        return TranscriptCleaner(apiKey: key)
+    /// The polisher for dictations, or nil when polishing is off or Claude has no key. On-device
+    /// polishing is returned even when Apple Intelligence is off, so the notice after a dictation
+    /// says how to turn it on.
+    func makeCleaner() -> (any TranscriptPolisher)? {
+        guard cleanupEnabled else { return nil }
+        return makeAssistant()
+    }
+
+    /// Whether polishing will actually run with the current choice.
+    var polishReady: Bool {
+        switch cleanupEngine {
+        case .onDevice: return OnDeviceCleaner.availability == .available
+        case .claude: return !apiKey(.anthropic).isEmpty
+        }
     }
 }

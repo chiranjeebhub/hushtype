@@ -274,7 +274,7 @@ struct APIKeyField: View {
 
 // MARK: - Polishing
 
-/// The Claude polishing switch with a before/after example and its key.
+/// The polishing switch with a before/after example, the engine choice and, for Claude, its key.
 struct PolishCard: View {
     @ObservedObject var settings: SettingsStore
 
@@ -285,7 +285,7 @@ struct PolishCard: View {
                     HStack(spacing: 12) {
                         IconTile(symbol: "sparkles", color: .pink, size: 32)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Polish with Claude").font(.body.weight(.semibold))
+                            Text("Polish your words").font(.body.weight(.semibold))
                             Text("Removes filler words, fixes punctuation, applies your corrections.")
                                 .font(.callout).foregroundStyle(.secondary)
                         }
@@ -305,8 +305,15 @@ struct PolishCard: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
 
                 if settings.cleanupEnabled {
-                    APIKeyField(service: .anthropic, settings: settings)
+                    PolishEnginePicker(settings: settings)
                         .transition(.opacity)
+                    Group {
+                        switch settings.cleanupEngine {
+                        case .onDevice: OnDeviceStatus()
+                        case .claude: APIKeyField(service: .anthropic, settings: settings)
+                        }
+                    }
+                    .transition(.opacity)
                 }
             }
         }
@@ -321,6 +328,147 @@ struct PolishCard: View {
             Text(text)
                 .font(.callout)
                 .foregroundStyle(muted ? .secondary : .primary)
+        }
+    }
+}
+
+extension CleanupEngine {
+    var symbol: String {
+        switch self {
+        case .onDevice: return "apple.intelligence"
+        case .claude: return "sparkles"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .onDevice: return "On this Mac"
+        case .claude: return "Claude"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .onDevice: return "Apple Intelligence. Free, private, works offline."
+        case .claude: return "Best quality and commands. Uses your Anthropic key."
+        }
+    }
+}
+
+/// Two tiles to pick where polishing runs: on this Mac or with Claude.
+struct PolishEnginePicker: View {
+    @ObservedObject var settings: SettingsStore
+    @State private var availability = OnDeviceCleaner.availability
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ForEach(CleanupEngine.allCases) { engine in
+                tile(engine)
+            }
+        }
+        .task {
+            // Apple Intelligence can finish downloading or be turned on while this is open.
+            while !Task.isCancelled {
+                availability = OnDeviceCleaner.availability
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    private var warningText: String {
+        switch availability {
+        case .downloading: return "Getting ready"
+        case .turnedOff: return "Turn on Apple Intelligence"
+        case .unsupported: return "Not on this Mac"
+        default: return "Not available right now"
+        }
+    }
+
+    private func tile(_ engine: CleanupEngine) -> some View {
+        let selected = settings.cleanupEngine == engine
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        let warning = engine == .onDevice && availability != .available
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) { settings.cleanupEngine = engine }
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Glyph(symbol: engine.symbol, brand: selected)
+                    Text(engine.title).font(.callout.weight(.semibold))
+                    Spacer(minLength: 4)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 15))
+                        .foregroundStyle(selected ? AnyShapeStyle(Color.hushViolet) : AnyShapeStyle(.tertiary))
+                }
+                Text(engine.tagline)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if warning {
+                    Label(warningText, systemImage: availability == .downloading ? "arrow.down.circle" : "exclamationmark.circle")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(shape.fill(selected ? Color.hushViolet.opacity(0.09) : Color.primary.opacity(0.035)))
+            .overlay(shape.strokeBorder(
+                selected
+                    ? AnyShapeStyle(LinearGradient(colors: [.hushViolet.opacity(0.85), .hushMint.opacity(0.5)],
+                                                   startPoint: .topLeading, endPoint: .bottomTrailing))
+                    : AnyShapeStyle(Color.primary.opacity(0.08)),
+                lineWidth: selected ? 1 : 0.5))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Whether Apple Intelligence is ready, and how to turn it on when it isn't.
+struct OnDeviceStatus: View {
+    @State private var availability = OnDeviceCleaner.availability
+
+    private var title: String {
+        switch availability {
+        case .downloading: return "Apple Intelligence is getting ready"
+        case .turnedOff: return "Apple Intelligence is off"
+        case .unsupported: return "Not available on this Mac"
+        default: return "Apple Intelligence isn't available"
+        }
+    }
+
+    static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.Siri-Settings.extension")!
+
+    var body: some View {
+        Group {
+            if availability == .available {
+                HStack(spacing: 12) {
+                    Glyph(symbol: "lock")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Polishing on this Mac").fontWeight(.medium)
+                        Text("Apple Intelligence cleans up your words. Nothing leaves your Mac.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 12)
+                    StatusPill(text: "Ready")
+                }
+            } else {
+                Callout(symbol: "warn", tint: .orange, title: title,
+                        message: availability.explanation ?? "") {
+                    if availability == .turnedOff || availability == .downloading {
+                        Button("Open Settings") { NSWorkspace.shared.open(Self.settingsURL) }
+                    }
+                }
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                let now = OnDeviceCleaner.availability
+                if now != availability { withAnimation(.easeInOut(duration: 0.2)) { availability = now } }
+                try? await Task.sleep(for: .seconds(2))
+            }
         }
     }
 }

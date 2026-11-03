@@ -300,7 +300,7 @@ struct OnboardingView: View {
 
     private var claudeStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Connect Claude", "Your speech is transcribed on this Mac, then Claude turns it into clean, punctuated text. One key is all it takes.")
+            header("Polish your words", "Your speech is transcribed on this Mac. Hushtype then turns it into clean, punctuated text, right here with Apple Intelligence or with Claude.")
             PolishCard(settings: settings)
         }
     }
@@ -400,7 +400,7 @@ struct OnboardingView: View {
         switch item {
         case .permissions: return Permissions.allGranted && controller.hotkeyActive
         case .speechModel: return modelStatus == .installed
-        case .claude: return !settings.cleanupEnabled || !settings.apiKey(.anthropic).isEmpty
+        case .claude: return !settings.cleanupEnabled || settings.polishReady
         default: return true
         }
     }
