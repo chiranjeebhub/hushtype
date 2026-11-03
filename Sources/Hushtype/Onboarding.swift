@@ -10,7 +10,7 @@ enum OnboardingStep: Int, CaseIterable {
         case .welcome: return "Welcome"
         case .permissions: return "Permissions"
         case .speechModel: return "Voice model"
-        case .claude: return "Connect Claude"
+        case .claude: return "Polish"
         case .tryIt: return "Try it"
         }
     }
@@ -190,7 +190,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 14) {
                 feature("keyboard", .blue, "Works everywhere", "Slack, Mail, Notion, your code editor. Anywhere you can type.")
                 feature("sparkles", .pink, "Reads like you wrote it", "Filler words gone, punctuation fixed, corrections applied.")
-                feature("lock.fill", .teal, "Your keys, your data", "Speech is transcribed on this Mac. Only text goes to Claude, with your own key.")
+                feature("lock.fill", .teal, "Your keys, your data", "Speech is transcribed on this Mac, and it can be polished here too. Claude is optional.")
             }
         }
     }
@@ -300,7 +300,7 @@ struct OnboardingView: View {
 
     private var claudeStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header("Polish your words", "Your speech is transcribed on this Mac. Hushtype then turns it into clean, punctuated text, right here with Apple Intelligence or with Claude.")
+            header("Polish your words", "Hushtype turns what you said into clean, punctuated text. Choose where that happens.")
             PolishCard(settings: settings)
         }
     }

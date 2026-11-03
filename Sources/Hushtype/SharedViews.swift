@@ -274,68 +274,67 @@ struct APIKeyField: View {
 
 // MARK: - Polishing
 
-/// The polishing switch with a before/after example, the engine choice and, for Claude, its key.
+/// Setup's polish step: a before/after, where polishing runs, and Claude's key when that's chosen.
+/// Turning polishing off is the step's "Skip" button, so there's no switch here.
 struct PolishCard: View {
     @ObservedObject var settings: SettingsStore
+    @State private var availability = OnDeviceCleaner.availability
 
     var body: some View {
-        Card(highlighted: settings.cleanupEnabled) {
-            VStack(alignment: .leading, spacing: 14) {
-                Toggle(isOn: $settings.cleanupEnabled.animation(.easeInOut(duration: 0.2))) {
-                    HStack(spacing: 12) {
-                        IconTile(symbol: "sparkles", color: .pink, size: 32)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Polish your words").font(.body.weight(.semibold))
-                            Text("Removes filler words, fixes punctuation, applies your corrections.")
-                                .font(.callout).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 16)
-                    }
-                }
-                .toggleStyle(.switch)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                example("You say", "um so let's meet at 5, no wait, 6 pm tomorrow", lit: false)
+                Icon("arrow.right", size: 14).foregroundStyle(Color.hushViolet)
+                example("Hushtype types", "Let's meet at 6 pm tomorrow.", lit: true)
+            }
+            .fixedSize(horizontal: false, vertical: true)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    example("You say", "um so let's meet at 5, no wait, 6 pm tomorrow", muted: true)
-                    example("Hushtype types", settings.cleanupEnabled
-                            ? "Let's meet at 6 pm tomorrow."
-                            : "um so let's meet at 5, no wait, 6 pm tomorrow", muted: false)
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+            PolishEnginePicker(settings: settings)
 
-                if settings.cleanupEnabled {
-                    PolishEnginePicker(settings: settings)
-                        .transition(.opacity)
-                    Group {
-                        switch settings.cleanupEngine {
-                        case .onDevice: OnDeviceStatus()
-                        case .claude: APIKeyField(service: .anthropic, settings: settings)
-                        }
-                    }
+            switch settings.cleanupEngine {
+            case .claude:
+                APIKeyField(service: .anthropic, settings: settings)
                     .transition(.opacity)
+            case .onDevice:
+                if availability != .available {
+                    OnDeviceStatus().transition(.opacity)
                 }
+            }
+        }
+        .onAppear { settings.cleanupEnabled = true }
+        .task {
+            while !Task.isCancelled {
+                let now = OnDeviceCleaner.availability
+                if now != availability { withAnimation(.easeInOut(duration: 0.2)) { availability = now } }
+                try? await Task.sleep(for: .seconds(2))
             }
         }
     }
 
-    private func example(_ label: String, _ text: String, muted: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 96, alignment: .leading)
+    private func example(_ label: String, _ text: String, lit: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.tertiary)
             Text(text)
                 .font(.callout)
-                .foregroundStyle(muted ? .secondary : .primary)
+                .foregroundStyle(lit ? .primary : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(shape.fill(lit ? Color.hushViolet.opacity(0.08) : Color.primary.opacity(0.04)))
+        .overlay(shape.strokeBorder(lit ? Color.hushViolet.opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 0.5))
     }
 }
 
 extension CleanupEngine {
     var symbol: String {
         switch self {
-        case .onDevice: return "apple.intelligence"
+        case .onDevice: return "macwindow"
         case .claude: return "sparkles"
         }
     }
@@ -349,8 +348,8 @@ extension CleanupEngine {
 
     var tagline: String {
         switch self {
-        case .onDevice: return "Apple Intelligence. Free, private, works offline."
-        case .claude: return "Best quality and commands. Uses your Anthropic key."
+        case .onDevice: return "Apple Intelligence. Free and offline."
+        case .claude: return "Best quality. Your Anthropic key."
         }
     }
 }
@@ -387,42 +386,49 @@ struct PolishEnginePicker: View {
     private func tile(_ engine: CleanupEngine) -> some View {
         let selected = settings.cleanupEngine == engine
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        let warning = engine == .onDevice && availability != .available
         return Button {
             withAnimation(.easeInOut(duration: 0.2)) { settings.cleanupEngine = engine }
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 10) {
-                    Glyph(symbol: engine.symbol, brand: selected)
-                    Text(engine.title).font(.callout.weight(.semibold))
-                    Spacer(minLength: 4)
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 15))
-                        .foregroundStyle(selected ? AnyShapeStyle(Color.hushViolet) : AnyShapeStyle(.tertiary))
+                    Glyph(symbol: engine.symbol)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(engine.title).font(.callout.weight(.semibold))
+                        Text(engine.tagline)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Text(engine.tagline)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if warning {
-                    Label(warningText, systemImage: availability == .downloading ? "arrow.down.circle" : "exclamationmark.circle")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
-                }
+                status(engine)
             }
             .padding(12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(shape.fill(selected ? Color.hushViolet.opacity(0.09) : Color.primary.opacity(0.035)))
-            .overlay(shape.strokeBorder(
-                selected
-                    ? AnyShapeStyle(LinearGradient(colors: [.hushViolet.opacity(0.85), .hushMint.opacity(0.5)],
-                                                   startPoint: .topLeading, endPoint: .bottomTrailing))
-                    : AnyShapeStyle(Color.primary.opacity(0.08)),
-                lineWidth: selected ? 1 : 0.5))
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(shape.fill(selected ? Color.hushViolet.opacity(0.08) : Color.primary.opacity(0.035)))
+            .overlay(shape.strokeBorder(selected ? Color.hushViolet.opacity(0.7) : Color.primary.opacity(0.08),
+                                        lineWidth: selected ? 1 : 0.5))
             .contentShape(shape)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// One quiet line on whether the engine can run right now.
+    private func status(_ engine: CleanupEngine) -> some View {
+        let (text, color): (String, Color) = {
+            switch engine {
+            case .onDevice:
+                return availability == .available ? ("Ready", .hushMint) : (warningText, .orange)
+            case .claude:
+                return settings.apiKey(.anthropic).isEmpty ? ("Needs an API key", .secondary) : ("Key saved", .hushMint)
+            }
+        }()
+        return HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text).font(.caption.weight(.medium)).foregroundStyle(color == .secondary ? Color.secondary : color)
+        }
+        .padding(.leading, 2)
     }
 }
 
