@@ -143,7 +143,7 @@ final class CloudSync {
         if let value = bool(Key.soundsEnabled), value != settings.soundsEnabled { settings.soundsEnabled = value }
         if let value = bool(Key.handsFree), value != settings.handsFree {
             settings.handsFree = value
-            controller.restartHotkey()
+            controller.applyHandsFreeSetting()
         }
         if let value = bool(Key.learnFromCorrections), value != settings.learnFromCorrections {
             settings.learnFromCorrections = value

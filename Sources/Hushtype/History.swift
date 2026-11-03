@@ -6,6 +6,9 @@ import HushtypeCore
 /// Only text and timings are kept, never audio.
 enum HistoryStore {
     static let limit = 200
+    /// Saves and erases run in order here, so an older save can't land after a newer one or
+    /// bring back history that was just cleared.
+    private static let queue = DispatchQueue(label: "app.hushtype.history", qos: .utility)
 
     private static var fileURL: URL? {
         guard let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -21,7 +24,7 @@ enum HistoryStore {
     static func save(_ items: [DictationResult]) {
         guard let url = fileURL else { return }
         let items = Array(items.prefix(limit))
-        DispatchQueue.global(qos: .utility).async {
+        queue.async {
             try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             guard let data = try? JSONEncoder().encode(items) else { return }
             try? data.write(to: url, options: [.atomic, .completeFileProtection])
@@ -30,7 +33,7 @@ enum HistoryStore {
 
     static func erase() {
         guard let url = fileURL else { return }
-        try? FileManager.default.removeItem(at: url)
+        queue.async { try? FileManager.default.removeItem(at: url) }
     }
 }
 

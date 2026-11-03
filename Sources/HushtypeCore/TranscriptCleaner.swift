@@ -163,6 +163,11 @@ public struct TranscriptCleaner: Sendable {
 
     struct Timeout: Error {}
 
+    /// Claude hit `max_tokens`, so its reply is missing the end and must not replace the transcript.
+    struct Truncated: LocalizedError {
+        var errorDescription: String? { "Claude's reply was cut short, so the transcript was inserted as heard." }
+    }
+
     /// Streams a reply, giving up when the first token or the whole reply takes too long.
     func streamWithDeadline(_ request: URLRequest,
                             firstTokenTimeout: Duration = TranscriptCleaner.firstTokenTimeout,
@@ -210,6 +215,7 @@ public struct TranscriptCleaner: Sendable {
                 text += delta
             case .stop(let reason):
                 if reason == "refusal" { return nil }
+                if reason == "max_tokens" { throw Truncated() }
             case .error(let message):
                 throw HushtypeError.badResponse("Anthropic: \(message)")
             case .end:
