@@ -103,7 +103,7 @@ public struct OnDeviceCleaner: TranscriptPolisher {
         // than what was said is that, not a cleanup; keep what the user said instead.
         guard Self.isPlausibleCleanup(output.text, of: transcript) else { return nil }
         var finished = output
-        finished.text = Self.punctuate(output.text)
+        finished.text = Self.punctuate(output.text, heard: transcript)
         return finished
     }
 
@@ -119,14 +119,20 @@ public struct OnDeviceCleaner: TranscriptPolisher {
 
     /// The small model often leaves out the capital and the closing mark. Add them; the dictation
     /// context lowercases and drops them again when the text continues a sentence.
-    static func punctuate(_ text: String) -> String {
+    static func punctuate(_ text: String, heard transcript: String = "") -> String {
         guard let first = text.first else { return text }
         var result = text
         if first.isLowercase { result = first.uppercased() + result.dropFirst() }
+        guard !result.contains("\n") else { return result }
+        let firstWord = result.prefix(while: { $0.isLetter }).lowercased()
+        let isQuestion = questionStarts.contains(firstWord) || transcript.contains("?")
         if let last = result.last, last.isLetter || last.isNumber {
-            let firstWord = result.prefix(while: { $0.isLetter }).lowercased()
-            let isSingleLine = !result.contains("\n")
-            if isSingleLine { result += questionStarts.contains(firstWord) ? "?" : "." }
+            result += isQuestion ? "?" : "."
+        } else if result.hasSuffix("?"), !isQuestion, !result.dropLast().contains("?") {
+            // It sometimes ends a plain statement with a question mark or an exclamation mark.
+            result = result.dropLast() + "."
+        } else if result.hasSuffix("!"), !transcript.contains("!"), !result.dropLast().contains("!") {
+            result = result.dropLast() + "."
         }
         return result
     }
