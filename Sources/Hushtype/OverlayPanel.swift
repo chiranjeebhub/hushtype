@@ -8,7 +8,9 @@ final class OverlayPanel {
     private let panel: NSPanel
 
     init(controller: DictationController) {
-        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 380, height: 44),
+        // Wider than the pill needs: the panel is invisible and ignores the mouse, and the room
+        // keeps longer notices and errors from being cut off.
+        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 44),
                         styleMask: [.nonactivatingPanel, .borderless],
                         backing: .buffered, defer: true)
         panel.isFloatingPanel = true
@@ -58,10 +60,10 @@ private struct OverlayView: View {
                      : controller.phase == .transcribing ? "Transcribing…" : "Polishing…")
             case .error(let message):
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
-                Text(message).lineLimit(1)
+                Text(message).lineLimit(1).truncationMode(.middle)
             case .notice(let message):
                 Image(systemName: "info.circle.fill").foregroundStyle(.white.opacity(0.8))
-                Text(message).lineLimit(1)
+                Text(message).lineLimit(1).truncationMode(.middle)
             case .idle:
                 EmptyView()
             }

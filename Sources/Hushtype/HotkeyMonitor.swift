@@ -69,6 +69,11 @@ final class HotkeyMonitor {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            // While the tap was off the key may have been let go; without its release a
+            // push-to-talk recording would never finish.
+            if !triggerKey.isDown(in: CGEventSource.flagsState(.combinedSessionState)) {
+                perform(gesture.keyUp(at: ProcessInfo.processInfo.systemUptime))
+            }
         case .keyDown:
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
             perform(gesture.otherKey(isEscape: keyCode == 53)) // kVK_Escape
@@ -80,7 +85,7 @@ final class HotkeyMonitor {
             }
             guard keyCode == triggerKey.keyCode else { return }
             let now = ProcessInfo.processInfo.systemUptime
-            perform(event.flags.contains(triggerKey.flag) ? gesture.keyDown(at: now) : gesture.keyUp(at: now))
+            perform(triggerKey.isDown(in: event.flags) ? gesture.keyDown(at: now) : gesture.keyUp(at: now))
         default:
             break
         }
@@ -112,11 +117,14 @@ extension TriggerKey {
         }
     }
 
-    var flag: CGEventFlags {
+    /// Whether this key is held in `flags`. The right-hand keys are checked with their device bits
+    /// (NX_DEVICERALTKEYMASK, NX_DEVICERCMDKEYMASK), since the plain Option and Command flags stay
+    /// set while the left-hand key is held, which would hide the trigger's release.
+    func isDown(in flags: CGEventFlags) -> Bool {
         switch self {
-        case .fn: return .maskSecondaryFn
-        case .rightOption: return .maskAlternate
-        case .rightCommand: return .maskCommand
+        case .fn: return flags.contains(.maskSecondaryFn)
+        case .rightOption: return flags.rawValue & 0x40 != 0
+        case .rightCommand: return flags.rawValue & 0x10 != 0
         }
     }
 }

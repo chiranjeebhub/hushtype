@@ -49,8 +49,11 @@ final class DictationController: ObservableObject {
     private var focusCapture: Task<(context: DictationContext, field: FocusedField?), Never>?
     private var errorDismissTask: Task<Void, Never>?
     private var coolDownTask: Task<Void, Never>?
-    /// True while the Mac is asleep or the screen is locked; the mic is always closed then.
-    private var micSuspended = false
+    /// The mic is always closed while the Mac is asleep or the screen is locked. The two are
+    /// tracked apart, since the Mac wakes (and would reopen the mic) before the screen unlocks.
+    private var asleep = false
+    private var screenLocked = false
+    private var micSuspended: Bool { asleep || screenLocked }
     private var systemObservers: [NSObjectProtocol] = []
     /// ⌃⌘V pastes the last dictation again, for when a paste missed.
     private var pasteLastShortcut: GlobalShortcut?
@@ -125,22 +128,29 @@ final class DictationController: ObservableObject {
     private func observeSleepAndLock() {
         let workspace = NSWorkspace.shared.notificationCenter
         let distributed = DistributedNotificationCenter.default()
-        let suspend: @Sendable (Notification) -> Void = { [weak self] _ in
-            Task { @MainActor in self?.suspendMic(true) }
-        }
-        let resume: @Sendable (Notification) -> Void = { [weak self] _ in
-            Task { @MainActor in self?.suspendMic(false) }
+        func on(_ change: @escaping @Sendable @MainActor (DictationController) -> Void) -> @Sendable (Notification) -> Void {
+            { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    let wasSuspended = self.micSuspended
+                    change(self)
+                    if self.micSuspended != wasSuspended { self.suspendMic(self.micSuspended) }
+                }
+            }
         }
         systemObservers = [
-            workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main, using: suspend),
-            workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: resume),
-            distributed.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main, using: suspend),
-            distributed.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main, using: resume),
+            workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main,
+                                  using: on { $0.asleep = true }),
+            workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main,
+                                  using: on { $0.asleep = false }),
+            distributed.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main,
+                                    using: on { $0.screenLocked = true }),
+            distributed.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main,
+                                    using: on { $0.screenLocked = false }),
         ]
     }
 
     private func suspendMic(_ suspended: Bool) {
-        micSuspended = suspended
         if suspended {
             coolDownTask?.cancel()
             if phase == .recording { cancelRecording() }
@@ -170,8 +180,15 @@ final class DictationController: ObservableObject {
     }
 
     func restartHotkey() {
+        // Restarting forgets the held key, so its release would never end a recording.
+        if phase == .recording { cancelRecording() }
         hotkey.stop()
         start()
+    }
+
+    /// Call when the hands-free setting changes. Takes effect without restarting the listener.
+    func applyHandsFreeSetting() {
+        hotkey.handsFreeEnabled = settings.handsFree
     }
 
     /// Types the most recent dictation again at the cursor.
@@ -288,7 +305,9 @@ final class DictationController: ObservableObject {
                                                  snippets: snippets)
                 let result = try await pipeline.polish(transcript, releasedAt: releasedAt,
                                                        transcribedAt: transcribedAt) {
-                    Task { @MainActor in self.phase = .cleaning }
+                    // Only while still waiting: a fast reply can land before this hop runs, and
+                    // must not leave the menu bar stuck on "Polishing…".
+                    Task { @MainActor in if self.phase == .transcribing { self.phase = .cleaning } }
                 }
                 deliver(result, into: captured)
             } catch HushtypeError.noSpeech {
@@ -441,6 +460,9 @@ final class DictationController: ObservableObject {
     }
 
     private func show(notice message: String) {
+        // A message still waiting to be dismissed would otherwise clear this one, or a recording
+        // started after it.
+        errorDismissTask?.cancel()
         phase = .notice(message)
         overlay.show()
         errorDismissTask = Task { [weak self] in
@@ -451,12 +473,13 @@ final class DictationController: ObservableObject {
     }
 
     private func show(error message: String) {
+        errorDismissTask?.cancel()
         phase = .error(message)
         overlay.show()
         errorDismissTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled else { return }
-            self?.reset()
+            guard !Task.isCancelled, let self, self.isError else { return }
+            self.reset()
         }
     }
 }

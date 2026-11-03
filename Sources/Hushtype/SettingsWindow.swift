@@ -646,7 +646,7 @@ private struct DictationPane: View {
         }
         .animation(.easeOut(duration: 0.2), value: settings.triggerKey)
         .onChange(of: settings.triggerKey) { controller.restartHotkey() }
-        .onChange(of: settings.handsFree) { controller.restartHotkey() }
+        .onChange(of: settings.handsFree) { controller.applyHandsFreeSetting() }
         .onChange(of: settings.language) { controller.prepareSpeechModel() }
         .onChange(of: settings.alwaysReadyMic) { controller.applyMicMode() }
     }

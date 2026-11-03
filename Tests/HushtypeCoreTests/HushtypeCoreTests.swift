@@ -294,3 +294,18 @@ final class SnippetSyncTests: XCTestCase {
         XCTAssertEqual(merged.first?.expansion, "new")
     }
 }
+
+final class HushtypeErrorTests: XCTestCase {
+    func testHTTPErrorsReadAsSentences() {
+        let rejected = HushtypeError.http(service: "Anthropic", status: 401,
+                                          body: #"{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#)
+        XCTAssertEqual(rejected.localizedDescription, "Anthropic didn't accept your API key. Check it in Settings.")
+        let credit = HushtypeError.http(service: "Anthropic", status: 400,
+                                        body: #"{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low."}}"#)
+        XCTAssertEqual(credit.localizedDescription, "Anthropic: Your credit balance is too low.")
+        XCTAssertEqual(HushtypeError.http(service: "Anthropic", status: 529, body: "").localizedDescription,
+                       "Anthropic is having trouble right now (HTTP 529). Try again shortly.")
+        XCTAssertEqual(HushtypeError.http(service: "Anthropic", status: 404, body: "<html>").localizedDescription,
+                       "Anthropic returned HTTP 404.")
+    }
+}
