@@ -314,6 +314,7 @@ final class OnDeviceCleanerTests: XCTestCase {
     func testUnwrapStripsTags() {
         XCTAssertEqual(OnDeviceCleaner.unwrap("  <transcript>\nHello there.\n</transcript> "), "Hello there.")
         XCTAssertEqual(OnDeviceCleaner.unwrap("Plain text."), "Plain text.")
+        XCTAssertEqual(OnDeviceCleaner.unwrap("<before_cursor>What time is it?</before_cursor"), "What time is it?")
     }
 
     func testAnswersAreNotCleanups() {
@@ -339,6 +340,7 @@ final class OnDeviceCleanerTests: XCTestCase {
         for sample in samples {
             let output = try await cleaner.clean(sample, vocabulary: ["Hushtype"])
             print("ON-DEVICE \(String(format: "%.2f", output?.total ?? 0))s: \(sample) -> \(output?.text ?? "(nil)")")
+            XCTAssertFalse(output?.text.contains("<") ?? false)
         }
         let meeting = try await cleaner.clean(samples[0], vocabulary: [])
         XCTAssertTrue(meeting?.text.contains("6") ?? false)
