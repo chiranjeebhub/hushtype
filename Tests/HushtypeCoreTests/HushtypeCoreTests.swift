@@ -330,7 +330,7 @@ final class OnDeviceCleanerTests: XCTestCase {
         XCTAssertEqual(OnDeviceCleaner.punctuate("Done!"), "Done!")
         XCTAssertEqual(OnDeviceCleaner.punctuate("- milk\n- eggs"), "- milk\n- eggs")
         XCTAssertEqual(OnDeviceCleaner.punctuate("Let's meet at 6 pm tomorrow?"), "Let's meet at 6 pm tomorrow.")
-        XCTAssertEqual(OnDeviceCleaner.punctuate("So let's meet at 6 pm!"), "So let's meet at 6 pm.")
+        XCTAssertEqual(OnDeviceCleaner.punctuate("So let's meet at 6 pm!", heard: "so let's meet at 6 pm"), "So let's meet at 6 pm.")
         XCTAssertEqual(OnDeviceCleaner.punctuate("Can you send it?"), "Can you send it?")
     }
 

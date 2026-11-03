@@ -119,19 +119,19 @@ public struct OnDeviceCleaner: TranscriptPolisher {
 
     /// The small model often leaves out the capital and the closing mark. Add them; the dictation
     /// context lowercases and drops them again when the text continues a sentence.
-    static func punctuate(_ text: String, heard transcript: String = "") -> String {
+    static func punctuate(_ text: String, heard transcript: String? = nil) -> String {
         guard let first = text.first else { return text }
         var result = text
         if first.isLowercase { result = first.uppercased() + result.dropFirst() }
         guard !result.contains("\n") else { return result }
         let firstWord = result.prefix(while: { $0.isLetter }).lowercased()
-        let isQuestion = questionStarts.contains(firstWord) || transcript.contains("?")
+        let isQuestion = questionStarts.contains(firstWord) || (transcript?.contains("?") ?? false)
         if let last = result.last, last.isLetter || last.isNumber {
             result += isQuestion ? "?" : "."
         } else if result.hasSuffix("?"), !isQuestion, !result.dropLast().contains("?") {
             // It sometimes ends a plain statement with a question mark or an exclamation mark.
             result = result.dropLast() + "."
-        } else if result.hasSuffix("!"), !transcript.contains("!"), !result.dropLast().contains("!") {
+        } else if result.hasSuffix("!"), let transcript, !transcript.contains("!"), !result.dropLast().contains("!") {
             result = result.dropLast() + "."
         }
         return result
