@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import HushtypeCore
+import os
 
 /// Runs one dictation at a time: hold key → record and transcribe live → polish → paste.
 @MainActor
@@ -365,55 +366,142 @@ final class DictationController: ObservableObject {
         if let reason = result.fallbackReason { show(notice: reason) }
         if let field = target?.field, let location = target?.context.selectionLocation {
             watchForCorrections(PendingCorrection(field: field, location: location, inserted: result.text))
+        } else if settings.learnFromCorrections {
+            learningLog.info("No text field to watch for corrections in \(target?.context.appName ?? "this app", privacy: .public)")
         }
     }
 
     // MARK: - Learning from corrections
 
     struct PendingCorrection: Sendable {
+        let id = UUID()
         let field: FocusedField
         let location: Int
         let inserted: String
     }
 
+    /// How long after a paste Hushtype keeps an eye on the field.
+    private static let correctionWatchSeconds = 90.0
+    private let learningLog = Logger(subsystem: "app.hushtype.Hushtype", category: "learning")
+    private let returnKeyTap = ReturnKeyTap()
     private var pendingCorrection: PendingCorrection?
     private var correctionTask: Task<Void, Never>?
+    /// Fixes in the latest settled read of the field, learned when the watch ends.
+    private var correctionCandidate: [CorrectionLearner.Correction] = []
+    /// The previous poll, so a read only counts once the field has held still for a second.
+    private var lastCorrectionRead: String?
+    private var failedCorrectionReads = 0
 
-    /// Re-reads the field a few times after pasting. If the user respelled a word Hushtype typed,
-    /// the new spelling joins the dictionary.
+    /// Follows the field after pasting, so a word the user respells joins the dictionary. It reads
+    /// the field every second, and right as Return goes down: chat apps send and clear the text on
+    /// Return, often a moment after the fix. The fixes are learned once the text is gone, when the
+    /// next dictation starts, or after a minute and a half.
     private func watchForCorrections(_ pending: PendingCorrection) {
-        correctionTask?.cancel()
+        stopWatchingForCorrections()
         guard settings.learnFromCorrections else { return }
         pendingCorrection = pending
+        correctionCandidate = []
+        lastCorrectionRead = nil
+        failedCorrectionReads = 0
+        learningLog.info("Watching \(pending.inserted.count) characters at \(pending.location) for corrections")
+
+        returnKeyTap.start(read: { Self.readCorrectionWindow(pending) }) { [weak self] window in
+            Task { @MainActor in self?.considerCorrectionRead(window, of: pending, settled: true, source: "Return") }
+        }
         correctionTask = Task { [weak self] in
-            for delay in [8, 20, 45] {
-                try? await Task.sleep(for: .seconds(delay))
+            let deadline = Date().addingTimeInterval(Self.correctionWatchSeconds)
+            while Date() < deadline {
+                try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
-                await self?.checkForCorrections(pending)
+                let window = await Task.detached(priority: .utility) { Self.readCorrectionWindow(pending) }.value
+                guard !Task.isCancelled, let self else { return }
+                if !self.considerCorrectionRead(window, of: pending, settled: false, source: "poll") {
+                    // The text is gone. A Return read may still be on its way to the main actor.
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    break
+                }
             }
+            self?.finishWatchingForCorrections(readAgain: false)
         }
     }
 
-    /// Checks once more, then stops watching. Called when the next dictation starts.
-    private func finishWatchingForCorrections() {
-        correctionTask?.cancel()
-        correctionTask = nil
-        guard let pending = pendingCorrection else { return }
-        pendingCorrection = nil
-        Task { await checkForCorrections(pending) }
+    /// Reads the stretch of the field around the dictation. Runs off the main thread.
+    nonisolated private static func readCorrectionWindow(_ pending: PendingCorrection) -> String? {
+        let length = (pending.inserted as NSString).length
+        let start = max(0, pending.location - 60)
+        var range = NSRange(location: start, length: pending.location - start + length + 120)
+        if let count = pending.field.characterCount {
+            // Asking past the end fails in most apps.
+            range.length = max(0, min(range.length, count - start))
+        }
+        return pending.field.text(in: range)
     }
 
-    private func checkForCorrections(_ pending: PendingCorrection) async {
-        let corrections = await Task.detached(priority: .utility) { () -> [CorrectionLearner.Correction] in
-            let length = (pending.inserted as NSString).length
-            let start = max(0, pending.location - 60)
-            guard let window = pending.field.text(in: NSRange(location: start, length: pending.location - start + length + 120))
-            else { return [] }
-            return CorrectionLearner.corrections(inserted: pending.inserted, edited: window)
-        }.value
+    /// Takes in one read of the field. Returns false once the dictation is no longer there.
+    @discardableResult
+    private func considerCorrectionRead(_ window: String?, of pending: PendingCorrection,
+                                        settled: Bool, source: String) -> Bool {
+        guard pendingCorrection?.id == pending.id else { return false }
+        guard let window else {
+            failedCorrectionReads += 1
+            learningLog.info("Couldn't read the field (\(source, privacy: .public))")
+            // The field went away, like a chat box replaced after sending.
+            return failedCorrectionReads < 3
+        }
+        failedCorrectionReads = 0
+        let analysis = CorrectionLearner.analyze(inserted: pending.inserted, edited: window)
+        guard analysis.isPresent else {
+            learningLog.info("Dictation no longer in the field (\(source, privacy: .public))")
+            return false
+        }
+        // A poll mid-word could catch half a fix, so it only counts once the field held still.
+        let counts = settled || window == lastCorrectionRead
+        if counts { correctionCandidate = analysis.corrections }
+        lastCorrectionRead = window
+        if !analysis.corrections.isEmpty {
+            learningLog.info("Read \(analysis.corrections.count) fix(es) (\(source, privacy: .public), counted: \(counts))")
+        }
+        return true
+    }
+
+    private func stopWatchingForCorrections() {
+        correctionTask?.cancel()
+        correctionTask = nil
+        returnKeyTap.stop()
+        pendingCorrection = nil
+    }
+
+    /// Learns what the watch found and stops watching. Called when the next dictation starts
+    /// (after one last look, off the main thread) and when the watch runs out or the text is gone.
+    private func finishWatchingForCorrections(readAgain: Bool = true) {
+        guard let pending = pendingCorrection else { return stopWatchingForCorrections() }
+        correctionTask?.cancel()
+        correctionTask = nil
+        returnKeyTap.stop()
+        guard readAgain else { return concludeWatch(pending) }
+        Task { [weak self] in
+            let window = await Task.detached(priority: .utility) { Self.readCorrectionWindow(pending) }.value
+            self?.considerCorrectionRead(window, of: pending, settled: true, source: "final")
+            self?.concludeWatch(pending)
+        }
+    }
+
+    private func concludeWatch(_ pending: PendingCorrection) {
+        guard pendingCorrection?.id == pending.id else { return }
+        let corrections = correctionCandidate
+        pendingCorrection = nil
+        correctionCandidate = []
+        lastCorrectionRead = nil
+        learn(from: corrections)
+    }
+
+    private func learn(from corrections: [CorrectionLearner.Correction]) {
         let known = Set(settings.vocabulary.map { $0.lowercased() })
         let learned = corrections.filter { Self.worthLearning($0, known: known) }.map(\.to)
+        learningLog.info("Watch ended: \(corrections.count) fix(es), \(learned.count) worth learning")
         guard !learned.isEmpty else { return }
+        learningLog.info("Learned \(learned.joined(separator: ", "), privacy: .private)")
         settings.addToDictionary(learned)
         if phase == .idle || isNotice {
             let names = learned.map { "“\($0)”" }.joined(separator: ", ")

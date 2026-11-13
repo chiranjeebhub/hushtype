@@ -13,16 +13,33 @@ public enum CorrectionLearner {
         public let atSentenceStart: Bool
     }
 
+    /// What one read of the field says about a dictation Hushtype inserted.
+    public struct Analysis: Equatable, Sendable {
+        /// Word fixes in the field, as `corrections(inserted:edited:)` finds them.
+        public let corrections: [Correction]
+        /// The dictation is still in the field, as typed or with a few words respelled. False once
+        /// the text is gone (a chat app sent and cleared it) or was rewritten.
+        public let isPresent: Bool
+    }
+
     /// Compares what was inserted with the same stretch of the field a little later.
     /// `edited` may include extra words on either side; they're ignored.
     /// Returns one-for-one word swaps that look like spelling fixes, not rewrites.
     public static func corrections(inserted: String, edited: String) -> [Correction] {
+        analyze(inserted: inserted, edited: edited).corrections
+    }
+
+    /// Like `corrections(inserted:edited:)`, and also says whether the dictation is still there.
+    public static func analyze(inserted: String, edited: String) -> Analysis {
         let old = words(inserted)
         let new = words(edited)
-        guard !old.isEmpty, !new.isEmpty, old.count <= 400, new.count <= 600 else { return [] }
+        guard !old.isEmpty, !new.isEmpty, old.count <= 400, new.count <= 600 else {
+            return Analysis(corrections: [], isPresent: false)
+        }
 
         var result: [Correction] = []
-        for hunk in diff(old.map(\.text), new.map(\.text)) {
+        let (hunks, matched) = diff(old.map(\.text), new.map(\.text))
+        for hunk in hunks {
             // Only same-length replacements of up to three words: a respelling, not new wording.
             guard hunk.removed.count == hunk.added.count, hunk.removed.count <= 3 else { continue }
             for (offset, index) in hunk.removed.enumerated() {
@@ -34,7 +51,9 @@ public enum CorrectionLearner {
                                          atSentenceStart: target.atSentenceStart))
             }
         }
-        return result
+        // At least half the dictated words are still there, unchanged or respelled.
+        let isPresent = (matched + result.count) * 2 >= old.count
+        return Analysis(corrections: result, isPresent: isPresent)
     }
 
     /// True when `to` is plausibly the same word spelled differently.
@@ -63,8 +82,9 @@ public enum CorrectionLearner {
 
     /// Word-level LCS diff of the inserted words `a` against the field's words `b`, returned as runs
     /// of removed (indexes into `a`) and added (indexes into `b`) words. Words of `b` before and
-    /// after the inserted stretch are surrounding text and are left out.
-    static func diff(_ a: [String], _ b: [String]) -> [Hunk] {
+    /// after the inserted stretch are surrounding text and are left out. Also returns how many
+    /// words of `a` appear unchanged in `b`.
+    static func diff(_ a: [String], _ b: [String]) -> (hunks: [Hunk], matched: Int) {
         let n = a.count, m = b.count
         var lcs = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
         for i in stride(from: n - 1, through: 0, by: -1) {
@@ -96,7 +116,8 @@ public enum CorrectionLearner {
                 current.removed.append(i); i += 1
             }
         }
-        guard !current.removed.isEmpty else { return hunks }
+        let matched = lcs[0][0]
+        guard !current.removed.isEmpty else { return (hunks, matched) }
         if matchedAny {
             // Trailing run: a respelled last word, then surrounding text.
             hunks.append(Hunk(removed: current.removed, added: Array(current.added.prefix(current.removed.count))))
@@ -107,7 +128,7 @@ public enum CorrectionLearner {
             // A single inserted word with nothing else to anchor on: pick the closest word.
             hunks.append(Hunk(removed: [0], added: [best]))
         }
-        return hunks
+        return (hunks, matched)
     }
 
     static func editDistance(_ a: [Character], _ b: [Character]) -> Int {

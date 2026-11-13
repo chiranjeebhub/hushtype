@@ -193,6 +193,27 @@ final class CorrectionLearnerTests: XCTestCase {
         let found = CorrectionLearner.corrections(inserted: "hushtipe", edited: "try Hushtype now")
         XCTAssertEqual(found.map(\.to), ["Hushtype"])
     }
+
+    func testDictationStillPresentWhileBeingFixed() {
+        let analysis = CorrectionLearner.analyze(inserted: "Ask shiranjib about the cubernetes rollout.",
+                                                 edited: "Ask Chiranjeeb about the Kubernetes rollout.")
+        XCTAssertTrue(analysis.isPresent)
+        XCTAssertEqual(analysis.corrections.map(\.to), ["Chiranjeeb", "Kubernetes"])
+    }
+
+    func testSentMessageIsNoLongerPresent() {
+        let inserted = "Ask shiranjib about the rollout."
+        // A chat app cleared the box after Enter, or the next message is being typed.
+        XCTAssertFalse(CorrectionLearner.analyze(inserted: inserted, edited: "").isPresent)
+        XCTAssertFalse(CorrectionLearner.analyze(inserted: inserted, edited: "ok thanks").isPresent)
+        XCTAssertTrue(CorrectionLearner.analyze(inserted: inserted, edited: "ok thanks").corrections.isEmpty)
+    }
+
+    func testSingleRespelledWordIsPresent() {
+        let analysis = CorrectionLearner.analyze(inserted: "hushtipe", edited: "Hushtype")
+        XCTAssertTrue(analysis.isPresent)
+        XCTAssertEqual(analysis.corrections.map(\.to), ["Hushtype"])
+    }
 }
 
 final class SnippetTests: XCTestCase {
