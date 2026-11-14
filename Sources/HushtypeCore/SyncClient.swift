@@ -5,7 +5,7 @@ import Foundation
 /// server's version, so two devices syncing at once can't overwrite each other.
 public struct SyncClient: Sendable {
     /// The public server. Self-hosters can point the apps at their own copy of sync-server/.
-    public static let defaultServer = URL(string: "https://hushtype-sync.chiranjeeb.workers.dev")!
+    public static let defaultServer = URL(string: "https://hushtype-sync.chiranjib-jena.workers.dev")!
     /// Matches the server's limit.
     public static let maxBlobBytes = 512 * 1024
 
