@@ -32,7 +32,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .snippets: return "Say a phrase, and Hushtype types your saved text exactly as written."
         case .history: return "Your recent dictations, saved only on this Mac."
         case .permissions: return "Hushtype needs these to hear you and type for you."
-        case .general: return "Startup, setup and updates."
+        case .general: return "Startup, syncing with your devices, and updates."
         }
     }
 
@@ -68,7 +68,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .snippets: return ["shortcut", "expand", "text", "phrase"]
         case .history: return ["recent", "copy", "paste last", "search"]
         case .permissions: return ["accessibility", "input monitoring", "microphone", "privacy"]
-        case .general: return ["login", "startup", "setup", "updates", "version"]
+        case .general: return ["login", "startup", "setup", "updates", "version", "sync", "iphone", "android", "devices", "pair", "qr"]
         }
     }
 
@@ -103,6 +103,7 @@ final class SettingsWindowController {
     private let settings: SettingsStore
     private let controller: DictationController
     private let updater: Updater
+    private let deviceSync: DeviceSync
     private let runSetup: () -> Void
     private let navigation = SettingsNavigation()
     private var window: NSWindow?
@@ -110,10 +111,12 @@ final class SettingsWindowController {
     private var windowObservers: [NSObjectProtocol] = []
     private var windowButtons: NSHostingView<WindowButtons>?
 
-    init(settings: SettingsStore, controller: DictationController, updater: Updater, runSetup: @escaping () -> Void) {
+    init(settings: SettingsStore, controller: DictationController, updater: Updater, deviceSync: DeviceSync,
+         runSetup: @escaping () -> Void) {
         self.settings = settings
         self.controller = controller
         self.updater = updater
+        self.deviceSync = deviceSync
         self.runSetup = runSetup
     }
 
@@ -121,7 +124,7 @@ final class SettingsWindowController {
     func show(tab: String? = nil) {
         if window == nil {
             let root = SettingsRoot(navigation: navigation, settings: settings, controller: controller,
-                                    updater: updater, runSetup: runSetup)
+                                    updater: updater, deviceSync: deviceSync, runSetup: runSetup)
             let host = NSHostingController(rootView: root)
             host.sizingOptions = []
             let window = NSWindow(contentViewController: host)
@@ -234,6 +237,7 @@ private struct SettingsRoot: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var controller: DictationController
     @ObservedObject var updater: Updater
+    let deviceSync: DeviceSync
     let runSetup: () -> Void
     @StateObject private var permissions = PermissionMonitor()
 
@@ -273,7 +277,7 @@ private struct SettingsRoot: View {
         case .snippets: SnippetsPane(settings: settings)
         case .history: HistoryPane(settings: settings, controller: controller)
         case .permissions: PermissionsPane(controller: controller, permissions: permissions)
-        case .general: GeneralPane(settings: settings, updater: updater, runSetup: runSetup)
+        case .general: GeneralPane(settings: settings, updater: updater, deviceSync: deviceSync, runSetup: runSetup)
         }
     }
 }
@@ -1348,6 +1352,7 @@ private struct PermissionsPane: View {
 private struct GeneralPane: View {
     @ObservedObject var settings: SettingsStore
     @ObservedObject var updater: Updater
+    @ObservedObject var deviceSync: DeviceSync
     let runSetup: () -> Void
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var keySyncError: String?
@@ -1361,10 +1366,13 @@ private struct GeneralPane: View {
                     Button("Run Setup Again…", action: runSetup)
                 }
             }
+            DeviceSyncSection(sync: deviceSync)
             SectionLabel("iCloud")
             SettingsCard {
                 ToggleRow(title: "Sync with iCloud",
-                          subtitle: "Your dictionary, snippets and style settings follow you to your other Macs. The dictation key, microphone and history stay on this Mac.",
+                          subtitle: deviceSync.isOn
+                            ? "Your style settings follow you to your other Macs. Your dictionary and snippets sync with your devices above."
+                            : "Your dictionary, snippets and style settings follow you to your other Macs. The dictation key, microphone and history stay on this Mac.",
                           symbol: "icloud", isOn: $settings.iCloudSync)
                 SettingsRow(title: "Include Anthropic API key",
                             subtitle: keySyncError ?? "Kept in iCloud Keychain, end-to-end encrypted, so you only paste it once.",

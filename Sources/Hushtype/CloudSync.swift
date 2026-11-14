@@ -100,11 +100,17 @@ final class CloudSync {
     private func push(_ value: Bool, _ key: String) { store.set(value, forKey: key) }
     private func push(_ value: String, _ key: String) { store.set(value, forKey: key) }
 
+    /// Hushtype device sync carries the dictionary and snippets when it's on. iCloud copies them
+    /// only by replacing the whole list, which would undo that sync's per-word merging.
+    private var deviceSyncOn: Bool { UserDefaults.standard.bool(forKey: DeviceSync.enabledKey) }
+
     private func pushDictionary() {
+        guard !deviceSyncOn else { return }
         store.set(settings.dictionaryText, forKey: Key.dictionary)
     }
 
     private func pushSnippets() {
+        guard !deviceSyncOn else { return }
         if let data = try? JSONEncoder().encode(settings.snippets) { store.set(data, forKey: Key.snippets) }
     }
 
@@ -120,14 +126,14 @@ final class CloudSync {
             DispatchQueue.main.async { [weak self] in self?.applyingRemote = false }
         }
 
-        if let remote = store.string(forKey: Key.dictionary) {
+        if !deviceSyncOn, let remote = store.string(forKey: Key.dictionary) {
             if merging {
                 settings.addToDictionary(DictationPipeline.vocabulary(from: remote))
             } else if remote != settings.dictionaryText {
                 settings.dictionaryText = remote
             }
         }
-        if let data = store.data(forKey: Key.snippets),
+        if !deviceSyncOn, let data = store.data(forKey: Key.snippets),
            let remote = try? JSONDecoder().decode([Snippet].self, from: data) {
             let updated = merging ? SnippetSync.merge(settings.snippets, remote) : remote
             if updated != settings.snippets { settings.snippets = updated }
