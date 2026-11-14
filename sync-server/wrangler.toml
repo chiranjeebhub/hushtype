@@ -5,4 +5,4 @@ compatibility_date = "2026-10-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "hushtype-sync"
-database_id = "REPLACE_WITH_DATABASE_ID"
+database_id = "a5d1f455-ceb3-4bc0-9e6c-4b659a9e1f58"
