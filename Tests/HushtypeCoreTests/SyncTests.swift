@@ -254,3 +254,23 @@ final class SyncClientTests: XCTestCase {
         }
     }
 }
+
+/// Runs against the real server: HUSHTYPE_SYNC_LIVE=1 swift test --filter LiveSyncTests
+final class LiveSyncTests: XCTestCase {
+    func testTwoDevicesThroughRealServer() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["HUSHTYPE_SYNC_LIVE"] == "1", "Set HUSHTYPE_SYNC_LIVE=1")
+        let keys = SyncKeys.generate()
+        let mac = SyncVocabulary().reconciled(terms: ["Kubernetes"], snippets: [], now: 10)
+        _ = try await SyncClient(keys: keys).sync(mac)
+        let phone = SyncVocabulary().reconciled(terms: ["Chiranjeeb"], snippets: [], now: 20)
+        let merged = try await SyncClient(keys: try XCTUnwrap(SyncKeys(pairingCode: keys.pairingCode)))
+            .sync(phone, joining: true)
+        XCTAssertEqual(Set(merged.liveTerms.map(\.text)), ["Kubernetes", "Chiranjeeb"])
+        do {
+            _ = try await SyncClient(keys: SyncKeys.generate()).sync(SyncVocabulary(), joining: true)
+            XCTFail("Expected noSuchGroup")
+        } catch {
+            XCTAssertEqual(error as? SyncError, .noSuchGroup)
+        }
+    }
+}
