@@ -33,14 +33,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionWatch: AnyCancellable?
     private var windowObservers: [NSObjectProtocol] = []
     private lazy var cloudSync = CloudSync(settings: settings, controller: controller)
+    /// Dictionary and snippets with the person's iPhone, Android and other Macs.
+    lazy var deviceSync = DeviceSync(settings: settings)
     private lazy var onboardingWindow = OnboardingWindowController(settings: settings, controller: controller)
     private lazy var settingsWindow = SettingsWindowController(settings: settings, controller: controller,
-                                                                updater: updater) { [weak self] in
+                                                                updater: updater, deviceSync: deviceSync) { [weak self] in
         self?.showOnboarding()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         _ = cloudSync
+        _ = deviceSync
         watchWindowsForDockIcon()
         controller.start()
         permissions.start(every: 2)
