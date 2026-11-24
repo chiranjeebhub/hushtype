@@ -4,7 +4,8 @@ import HushtypeCore
 
 /// Mirrors the style choices, which follow a person rather than a Mac, through iCloud key-value
 /// storage. DeviceSync carries the dictionary and snippets (through iCloud too, merged word by
-/// word with the iPhone). The dictation key, microphone, login item and history stay on each Mac, and so does "keep history", since turning it off erases that Mac's history.
+/// word with the iPhone). The dictation key, microphone, login item and history stay on each
+/// Mac, and so does "keep history", since turning it off erases that Mac's history.
 /// This Mac's copy stays the source of truth; iCloud carries changes between Macs.
 @MainActor
 final class CloudSync {
