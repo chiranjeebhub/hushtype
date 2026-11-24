@@ -5,11 +5,24 @@
 <p>
   <a href="https://hushtype.chiranjeeb.dev"><b>Website</b></a> ·
   <a href="https://github.com/chiranjeebhub/hushtype/releases/latest"><b>Download</b></a> ·
-  <code>brew install --cask chiranjeebhub/tap/hushtype</code>
+  <code>brew install --cask chiranjeebhub/tap/hushtype</code> ·
+  <a href="https://hushtype.chiranjeeb.dev/privacy"><b>Privacy</b></a>
 </p>
 
 Hold a key, speak, let go, and polished text appears in whatever app has focus. An open,
 privacy-first alternative to Wispr Flow, built as a native macOS app in Swift and SwiftUI.
+
+## Platforms
+
+| Platform | Status | Where |
+| --- | --- | --- |
+| **Mac** (macOS 26 Tahoe+) | Available | [Download](https://github.com/chiranjeebhub/hushtype/releases/latest) or `brew install --cask chiranjeebhub/tap/hushtype` |
+| **iPhone and iPad** (iOS 26+) | Coming soon to the App Store | A full keyboard with dictation in the top bar. Uses this repo's `HushtypeCore` package. |
+| **Android** (Android 12+) | Early preview, not on Google Play yet | Floating-bubble dictation into any app. Build it from [chiranjeebhub/hushtype-android](https://github.com/chiranjeebhub/hushtype-android). |
+
+Your dictionary and snippets can sync between all of them with end-to-end encryption, paired by QR code and
+with no account (see [`sync-server/`](sync-server)). What each app keeps and sends is in the
+[privacy policy](https://hushtype.chiranjeeb.dev/privacy).
 
 ## What it does
 

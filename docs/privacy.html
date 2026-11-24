@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Privacy Policy · Hushtype</title>
+<meta name="description" content="What Hushtype for Mac, iPhone and Android keeps on your device, what it sends and to whom, and how to turn each part off.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Hushtype">
+<meta property="og:title" content="Hushtype Privacy Policy">
+<meta property="og:description" content="Your voice is transcribed on your device. No accounts, analytics or ads.">
+<meta property="og:url" content="https://hushtype.chiranjeeb.dev/privacy">
+<meta property="og:image" content="https://hushtype.chiranjeeb.dev/og.png">
+<meta name="theme-color" content="#0A0818">
+<link rel="canonical" href="https://hushtype.chiranjeeb.dev/privacy">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#0A0818; --bg-2:#100D24; --surface:#17132F; --surface-2:#211B42; --line:rgba(170,155,255,.15);
+  --fg:#F1EEFF; --muted:#A39DC9; --faint:#655F8F;
+  --accent:#8B7BFF; --accent-deep:#5B47E8; --glow:rgba(124,107,255,.38);
+  --ok:#7CF5C8; --warm:#FFB547;
+  --display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body:"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono:"Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#F5F3FE; --bg-2:#ECE8FC; --surface:#FFFFFF; --surface-2:#F1EEFF; --line:rgba(45,25,130,.12);
+  --fg:#130E33; --muted:#575080; --faint:#8F89B3;
+  --accent:#5B47E8; --accent-deep:#4330C9; --glow:rgba(91,71,232,.24);
+  --ok:#0FA77A; --warm:#C97A00;
+  color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#F5F3FE; --bg-2:#ECE8FC; --surface:#FFFFFF; --surface-2:#F1EEFF; --line:rgba(45,25,130,.12);
+  --fg:#130E33; --muted:#575080; --faint:#8F89B3;
+  --accent:#5B47E8; --accent-deep:#4330C9; --glow:rgba(91,71,232,.24);
+  --ok:#0FA77A; --warm:#C97A00;
+  color-scheme:light}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 var(--body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+.wrap{max-width:1160px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.02em}
+
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:blur(14px) saturate(1.4);-webkit-backdrop-filter:blur(14px) saturate(1.4);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:28px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--fg);font:700 19px var(--display);letter-spacing:-.01em}
+.brand img{width:30px;height:30px}
+.back{margin-left:auto;font-size:14.5px;color:var(--muted);text-decoration:none}
+.back:hover{color:var(--fg)}
+
+.hero{position:relative;padding-block:clamp(48px,7vw,88px) 32px;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:-30% -10% auto;height:700px;background:radial-gradient(560px 340px at 80% 30%,var(--glow),transparent 70%);pointer-events:none}
+.hero .wrap{position:relative;display:grid;gap:18px}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(40px,6.4vw,76px);line-height:.98;font-weight:800;letter-spacing:-.035em}
+.lede{color:var(--muted);font-size:clamp(17px,1.6vw,19px);max-width:62ch;margin:0}
+.meta{font:13px var(--mono);color:var(--faint)}
+
+.layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:64px;padding-bottom:clamp(64px,9vw,120px)}
+.layout>div{min-width:0}
+.toc{position:sticky;top:96px;align-self:start;display:grid;gap:2px;font-size:14px}
+.toc a{color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:8px;border-left:2px solid transparent}
+.toc a:hover{color:var(--fg);background:var(--surface)}
+@media (max-width:900px){.layout{grid-template-columns:1fr;gap:24px}.toc{display:none}}
+
+.summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:56px}
+.summary div{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:18px 18px 16px}
+.summary b{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:4px}
+.summary b::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+.summary .opt b::before{background:var(--accent)}
+.summary span{color:var(--muted);font-size:14.5px}
+@media (max-width:640px){.summary{grid-template-columns:1fr}}
+
+article{max-width:72ch}
+article section{padding-top:8px;margin-bottom:44px;scroll-margin-top:84px}
+article h2{font-size:clamp(24px,3vw,32px);line-height:1.1;font-weight:800;margin-bottom:14px}
+article h3{font:600 17px var(--body);letter-spacing:0;margin:22px 0 6px}
+article p,article li{color:var(--muted)}
+article strong{color:var(--fg);font-weight:600}
+article ul{padding-left:20px;margin:10px 0}
+article li{margin:6px 0}
+article code{font:13.5px var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--fg)}
+.tbl{width:100%;border-collapse:collapse;font-size:14.5px;margin:14px 0 6px}
+.tbl th,.tbl td{text-align:left;vertical-align:top;padding:11px 12px;border-bottom:1px solid var(--line)}
+.tbl th{font:500 11.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.tbl td{color:var(--muted)}
+.tbl td:first-child{color:var(--fg);font-weight:500;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.note{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--surface);border-radius:10px;padding:14px 16px;margin:16px 0}
+.note p{margin:0}
+
+footer{border-top:1px solid var(--line);padding-block:28px;color:var(--faint);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center}
+footer nav{display:flex;flex-wrap:wrap;gap:12px 22px;margin-left:auto}
+footer a{color:var(--muted);text-decoration:none}
+footer a:hover{color:var(--fg)}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="icon.svg" alt="">Hushtype</a>
+    <a class="back" href="./">← Back to Hushtype</a>
+  </div>
+</header>
+
+<main>
+<div class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Privacy Policy</span>
+    <h1>Your words are yours.</h1>
+    <p class="lede">Hushtype turns speech into text on your own device. There are no accounts, no analytics and no ads. This page explains exactly what stays on your device, what can leave it, and how to turn each part off.</p>
+    <span class="meta">Effective 24 November 2026 · Applies to Hushtype for Mac, iPhone and iPad, and Android</span>
+  </div>
+</div>
+
+<div class="wrap layout">
+  <nav class="toc" aria-label="On this page">
+    <a href="#who">Who we are</a>
+    <a href="#device">What stays on your device</a>
+    <a href="#polish">Polish with Claude</a>
+    <a href="#sync">Sync</a>
+    <a href="#updates">Updates</a>
+    <a href="#permissions">Permissions</a>
+    <a href="#never">What we never do</a>
+    <a href="#rights">Your choices</a>
+    <a href="#children">Children</a>
+    <a href="#changes">Changes and contact</a>
+  </nav>
+
+  <div>
+    <div class="summary" aria-label="Summary">
+      <div><b>Audio stays on your device</b><span>Speech is transcribed on your Mac, iPhone or Android phone. Recordings are never uploaded or saved.</span></div>
+      <div><b>No accounts or tracking</b><span>No sign-in, no analytics, no advertising identifiers, no crash reporters.</span></div>
+      <div class="opt"><b>Claude polish is your choice</b><span>If you turn it on with your own API key, the text (never audio) goes straight to Anthropic. Or polish on-device.</span></div>
+      <div class="opt"><b>Sync is end-to-end encrypted</b><span>Your dictionary and snippets are encrypted before they leave the device. Our server can't read them.</span></div>
+    </div>
+
+    <article>
+      <section id="who">
+        <h2>Who we are</h2>
+        <p>Hushtype is an open-source app made by Chiranjeeb Jena (“we”, “us”). The source code for the Mac app is public at <a href="https://github.com/chiranjeebhub/hushtype">github.com/chiranjeebhub/hushtype</a> and the Android app at <a href="https://github.com/chiranjeebhub/hushtype-android">github.com/chiranjeebhub/hushtype-android</a>, so you can check everything on this page against the code.</p>
+        <p>We don't run a server that receives your speech, your transcripts or anything you type. The only service we operate is the optional sync server described below, which stores data it can't decrypt.</p>
+      </section>
+
+      <section id="device">
+        <h2>What stays on your device</h2>
+        <h3>Your voice</h3>
+        <p>On Mac, iPhone and iPad, Hushtype uses Apple's on-device speech recognition (SpeechAnalyzer). Audio from the microphone is turned into text in memory and then discarded. It is never written to disk and never sent anywhere.</p>
+        <p>On Android, Hushtype uses the phone's on-device speech recognizer when <strong>Recognize speech on this phone</strong> is on, which is the default. If you turn that setting off, or your phone has no on-device recognizer for your language, Android's system speech service is used instead, and that service (usually Google's) may process the audio on its own servers under its own privacy policy.</p>
+        <h3>Things Hushtype saves</h3>
+        <div class="scroll">
+        <table class="tbl">
+          <thead><tr><th>What</th><th>Where</th><th>Details</th></tr></thead>
+          <tbody>
+            <tr><td>Dictation history</td><td>On the device</td><td>Your recent dictations so you can copy them again: up to 200 on Mac, 100 on iPhone, 300 on Android. You can delete entries or clear the history, and on Mac you can turn history off.</td></tr>
+            <tr><td>Dictionary and snippets</td><td>On the device</td><td>Words and names you add, words Hushtype learns from your corrections, and your text shortcuts.</td></tr>
+            <tr><td>Settings</td><td>On the device</td><td>Your preferences, such as the dictation key and style.</td></tr>
+            <tr><td>Anthropic API key</td><td>Keychain / Android Keystore</td><td>Stored in the Mac or iPhone Keychain, or encrypted with a key held in the Android Keystore.</td></tr>
+            <tr><td>Sync pairing secret</td><td>Keychain / Android Keystore</td><td>Only if you set up sync. It never leaves your devices except when you show the QR code to pair another device.</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>Deleting the app deletes all of this. On Mac you can also run <code>brew uninstall --zap hushtype</code>.</p>
+        <h3>On-device polish</h3>
+        <p>If you choose on-device polish, the transcript is cleaned up by Apple Intelligence (Apple Foundation Models) on Mac and iPhone, or Gemini Nano on Android phones that have it. Nothing is sent off the device.</p>
+      </section>
+
+      <section id="polish">
+        <h2>Polish with Claude</h2>
+        <p>Polish with Claude is optional and only works with an Anthropic API key that you create and paste in yourself. When it is on, after you finish speaking Hushtype sends a request directly from your device to Anthropic's API (<code>api.anthropic.com</code>). There is no Hushtype server in between. The request contains:</p>
+        <ul>
+          <li>the <strong>text</strong> of what you said (never the audio);</li>
+          <li>the words in your dictionary, so names come out right;</li>
+          <li>the name of the app you're typing into, so the tone fits;</li>
+          <li>when context is on, a short piece of the text around your cursor: up to 600 characters before it and 200 after;</li>
+          <li>for spoken edit commands, the text you selected and the instruction you gave.</li>
+        </ul>
+        <p>Hushtype never reads password or other secure text fields. On Mac you can turn off context in Settings, so only the transcript and your dictionary are sent. Short phrases with nothing to fix skip Claude entirely.</p>
+        <p>Because the request is made with your own key, it is part of your account with Anthropic and is handled under <a href="https://www.anthropic.com/legal/privacy">Anthropic's Privacy Policy</a> and the terms you agreed to when you created the key. Under Anthropic's commercial terms, API inputs and outputs are not used to train their models. We never see these requests or Anthropic's responses.</p>
+        <div class="note"><p>Don't want any text to leave your device? Choose on-device polish, or turn polish off and use the raw transcript.</p></div>
+      </section>
+
+      <section id="sync">
+        <h2>Sync</h2>
+        <p>Sync is off until you turn it on. It carries your dictionary and snippets between your devices. Your dictation history is never synced.</p>
+        <h3>Hushtype Sync (Mac, iPhone and Android)</h3>
+        <p>You pair devices by scanning a QR code or typing a pairing code. There are no accounts. Your devices derive the encryption key from a random secret in that code, and your dictionary and snippets are encrypted with AES-256-GCM before they leave the device. Our sync server, which runs on Cloudflare Workers, stores only:</p>
+        <ul>
+          <li>a random group ID derived from your secret;</li>
+          <li>a hash of the access token your devices use to write;</li>
+          <li>the encrypted data, a version number and when it last changed.</li>
+        </ul>
+        <p>Nobody, including us, can read the encrypted data without your pairing code. The server doesn't log or keep IP addresses. Cloudflare carries the network traffic and handles it under <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's Privacy Policy</a>. If you stop syncing on every device, the last encrypted copy stays on the server until you ask us to remove it (see <a href="#changes">contact</a>).</p>
+        <h3>iCloud (between Macs)</h3>
+        <p>On Mac you can also turn on iCloud sync. Your dictionary, snippets and a few preferences are then stored in your iCloud account through Apple's iCloud key-value storage, and if you choose to sync your API key, it is stored in iCloud Keychain. This data is handled by Apple under <a href="https://www.apple.com/legal/privacy/">Apple's Privacy Policy</a>; we have no access to it.</p>
+      </section>
+
+      <section id="updates">
+        <h2>Updates</h2>
+        <p>The Mac app checks for updates by downloading a small file from GitHub, where new versions are published. Like any download, GitHub sees your IP address and the app's version, under <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's Privacy Statement</a>. Hushtype doesn't send a system profile with these checks. If you installed with Homebrew, updates come through Homebrew and GitHub in the same way. The App Store and Google Play handle updates for apps installed from them.</p>
+      </section>
+
+      <section id="permissions">
+        <h2>Permissions and why we ask</h2>
+        <div class="scroll">
+        <table class="tbl">
+          <thead><tr><th>Permission</th><th>Platform</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Microphone</td><td>All</td><td>To hear you while you dictate. On iPhone you can keep the microphone ready in the background for a while so the keyboard starts instantly; iOS shows the orange dot while it is, and you can turn this off.</td></tr>
+            <tr><td>Accessibility</td><td>Mac, Android</td><td>To notice the dictation key or bubble, type the text into the app you're using, and read the text around the cursor for context. Password fields are always skipped.</td></tr>
+            <tr><td>Full Access</td><td>iPhone, iPad keyboard</td><td>iOS requires Full Access for a keyboard to use the microphone and to share data with the Hushtype app, such as your dictionary and finished dictations. The keyboard doesn't record or send what you type anywhere.</td></tr>
+            <tr><td>Camera</td><td>iPhone</td><td>Only to scan a pairing QR code when you set up sync. Nothing is recorded. On Android, the QR scanner is provided by Google Play services, so Hushtype itself never gets camera access.</td></tr>
+            <tr><td>Notifications</td><td>Android</td><td>To show that dictation is running, as Android requires for microphone use.</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>The iPhone keyboard keeps its typing features, such as autocorrect and suggestions, on the device. It uses the text before the cursor to suggest words and, when Claude polish is on, includes a short piece of it in the polish request described above.</p>
+      </section>
+
+      <section id="never">
+        <h2>What we never do</h2>
+        <ul>
+          <li>We don't collect analytics, usage statistics, crash reports or advertising identifiers.</li>
+          <li>We don't sell, rent or share your data, and we don't show ads.</li>
+          <li>We don't track you across apps or websites.</li>
+          <li>We don't upload your audio, keep recordings, or use your dictations to train anything.</li>
+        </ul>
+        <p>This website is static and hosted on GitHub Pages. It sets no cookies and runs no analytics. It loads fonts from Google Fonts and reads the star count from GitHub, so those services see your IP address when you visit.</p>
+      </section>
+
+      <section id="rights">
+        <h2>Your choices</h2>
+        <p>Because your data lives on your devices, you're in control of it: you can view, copy and delete your history, dictionary and snippets in the app at any time, and deleting the app removes them. You can turn off Claude polish, context, history (Mac) and sync whenever you like. For data held by Anthropic, Apple, Google or Cloudflare, use their tools and policies linked above. You can ask us about or request removal of anything stored on our sync server using the contact below. Wherever you live, including under the GDPR and CCPA, we will help you exercise your rights.</p>
+      </section>
+
+      <section id="children">
+        <h2>Children</h2>
+        <p>Hushtype isn't directed at children under 13 and we don't knowingly collect personal information from anyone, children included.</p>
+      </section>
+
+      <section id="changes">
+        <h2>Changes and contact</h2>
+        <p>If what Hushtype collects or sends changes, we'll update this page and the date at the top before the change ships. The history of this page is public in the <a href="https://github.com/chiranjeebhub/hushtype/commits/main/docs/privacy.html">repository</a>.</p>
+        <p>Questions or requests: <a href="https://github.com/chiranjeebhub/hushtype/issues">open an issue on GitHub</a>, or contact the developer through <a href="https://github.com/chiranjeebhub">github.com/chiranjeebhub</a>.</p>
+      </section>
+    </article>
+  </div>
+</div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Chiranjeeb Jena · MIT License</span>
+    <nav aria-label="Footer">
+      <a href="./">Home</a>
+      <a href="https://github.com/chiranjeebhub/hushtype" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/chiranjeebhub/hushtype/issues" target="_blank" rel="noopener">Support</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

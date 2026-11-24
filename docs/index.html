@@ -296,6 +296,7 @@ h1 .soft{color:var(--muted)}
 .dl p{margin:0;color:var(--muted);font-size:14.5px}
 .dl .tag{justify-self:start;font:500 11.5px var(--mono);letter-spacing:.04em;padding:4px 8px;border-radius:6px;background:var(--surface-2);color:var(--muted)}
 .dl .tag.live{color:var(--ok)}
+.dl .tag.soon{color:var(--warm)}
 .dl .btn{justify-self:start;margin-top:6px}
 .dl .brew{margin-top:6px}
 .req{margin-top:18px;color:var(--muted);font-size:14px}
@@ -349,6 +350,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--fg)}
       <a href="#screenshots">Screenshots</a>
       <a href="#privacy">Privacy</a>
       <a href="#download">Download</a>
+      <a href="#platforms">iPhone &amp; Android</a>
       <a href="#faq">FAQ</a>
     </nav>
     <a class="star-btn" href="https://github.com/chiranjeebhub/hushtype" target="_blank" rel="noopener">
@@ -559,11 +561,11 @@ footer a{text-decoration:none}footer a:hover{color:var(--fg)}
     <div class="sec-head" style="margin:0">
       <span class="eyebrow">Privacy</span>
       <h2>Your voice never leaves your Mac.</h2>
-      <p class="lede">Speech recognition runs on-device with Apple’s SpeechAnalyzer. Only the transcript goes to Claude for polish, with your own key, and you can turn that off.</p>
+      <p class="lede">Speech recognition runs on-device with Apple’s SpeechAnalyzer. Only text, never audio, goes to Claude for polish, with your own key. Or polish on-device with Apple Intelligence, or turn polish off. <a href="privacy" style="color:var(--accent)">Read the privacy policy</a>.</p>
       <div class="pipe">
         <div><em>ON DEVICE</em>Microphone audio<small>never uploaded</small></div>
         <div><em>ON DEVICE</em>Speech to text<small>works offline</small></div>
-        <div><em class="k">YOUR KEY</em>Text cleanup<small>Claude Haiku</small></div>
+        <div><em class="k">YOUR CHOICE</em>Text cleanup<small>Claude or on-device</small></div>
         <div><em>ON DEVICE</em>History<small>stays on this Mac</small></div>
       </div>
     </div>
@@ -571,7 +573,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--fg)}
       <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg><div><b>Audio stays local</b><span>Your recordings are transcribed on your Mac and thrown away. Nothing is uploaded, ever.</span></div></li>
       <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg><div><b>Never reads password fields</b><span>Context from around your cursor helps with tone and names, but secure text fields are always skipped.</span></div></li>
       <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg><div><b>Your key, your account</b><span>Polish uses your own Anthropic API key, stored in the Keychain. There’s no Hushtype server in between.</span></div></li>
-      <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg><div><b>No accounts, analytics or ads</b><span>No sign-in, no tracking, and the code is open for anyone to check.</span></div></li>
+      <li><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg><div><b>No accounts, analytics or ads</b><span>No sign-in, no tracking, and the code is open for anyone to check. <a href="privacy" style="color:var(--accent)">Full privacy policy</a>.</span></div></li>
     </ul>
   </div>
 </section>
@@ -603,6 +605,35 @@ footer a{text-decoration:none}footer a:hover{color:var(--fg)}
       </div>
     </div>
     <p class="req">Requires macOS 26 Tahoe or later and an Anthropic API key for polish. On first launch Hushtype asks for Microphone and Accessibility access, which macOS requires before an app can hear you and type for you.</p>
+  </div>
+</section>
+
+<section id="platforms" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Everywhere you type</span>
+      <h2>Also coming to iPhone and Android.</h2>
+      <p class="lede">The same on-device dictation and polish, on your phone. Your dictionary and snippets follow you between devices with end-to-end encrypted sync, paired by QR code, with no account.</p>
+    </div>
+    <div class="dl-grid">
+      <div class="dl">
+        <span class="tag live">● Available now</span>
+        <h3>Mac</h3>
+        <p>Hold a key, talk, let go. Works in every app on macOS 26 Tahoe or later.</p>
+        <a class="btn btn-ghost" href="#download">Download for Mac</a>
+      </div>
+      <div class="dl">
+        <span class="tag soon">◐ Coming soon to the App Store</span>
+        <h3>iPhone &amp; iPad</h3>
+        <p>A full keyboard with a mic in the top bar, Apple’s layout and autocorrect, and dictation that works in any app. Needs iOS 26.</p>
+      </div>
+      <div class="dl">
+        <span class="tag soon">◐ Early preview</span>
+        <h3>Android</h3>
+        <p>A floating bubble that dictates into any app, with on-device speech and polish by Gemini Nano or Claude. Not on Google Play yet; build it from source.</p>
+        <a class="btn btn-ghost" href="https://github.com/chiranjeebhub/hushtype-android" target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -644,6 +675,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--fg)}
       <details><summary>Why does it need Accessibility access?</summary><p>macOS only lets an app notice a held key system-wide and type into other apps once you allow Accessibility. Hushtype also reads the text around your cursor for context, and never from password fields.</p></details>
       <details><summary>Does it work offline?</summary><p>Speech recognition does, once the voice model for your language has downloaded. Without a connection, or if Claude is slow to answer, you get the raw transcript within two seconds.</p></details>
       <details><summary>Can I change the dictation key?</summary><p>Yes. Right Option is the default, and you can switch to Right Command or Fn/🌐 in Settings. Pressing any other key while holding it cancels, so your shortcuts keep working.</p></details>
+      <details><summary>Is there an iPhone or Android version?</summary><p>Both are on the way. The iPhone and iPad keyboard is in testing and coming to the App Store. The Android app is an early preview you can build from <a href="https://github.com/chiranjeebhub/hushtype-android" target="_blank" rel="noopener" style="color:var(--accent)">its GitHub repo</a>; it isn’t on Google Play yet.</p></details>
       <details><summary>How is it different from Wispr Flow?</summary><p>Hushtype is a native Swift app, transcribes on your Mac instead of uploading your audio, is open source, and has no subscription.</p></details>
     </div>
   </div>
@@ -670,6 +702,7 @@ footer a{text-decoration:none}footer a:hover{color:var(--fg)}
       <a href="https://github.com/sponsors/chiranjeebhub" target="_blank" rel="noopener">Sponsor</a>
       <a href="https://buymeacoffee.com/chiranjeeb" target="_blank" rel="noopener">Buy me a coffee</a>
       <a href="https://github.com/chiranjeebhub/hushtype/issues" target="_blank" rel="noopener">Support</a>
+      <a href="privacy">Privacy</a>
     </nav>
   </div>
 </footer>
