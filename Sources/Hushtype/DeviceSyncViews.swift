@@ -13,7 +13,7 @@ struct DeviceSyncSection: View {
     var body: some View {
         SectionLabel("Your devices")
         SettingsCard {
-            if sync.isOn {
+            if sync.isPaired {
                 SettingsRow(title: "Dictionary and snippets sync",
                             subtitle: statusText,
                             symbol: "arrow.clockwise",
@@ -36,8 +36,8 @@ struct DeviceSyncSection: View {
                     Button("Turn Off") { sync.turnOff() }
                 }
             } else {
-                SettingsRow(title: "Sync with your iPhone and Android",
-                            subtitle: "Your dictionary and snippets, end-to-end encrypted. No account needed.",
+                SettingsRow(title: "Sync with Android and other devices",
+                            subtitle: "For devices that aren't on your Apple ID. End-to-end encrypted, no account needed.",
                             symbol: "arrow.clockwise",
                             info: Self.privacyNote) {
                     HStack(spacing: 8) {
