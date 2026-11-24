@@ -274,3 +274,21 @@ final class LiveSyncTests: XCTestCase {
         }
     }
 }
+
+final class SyncApplyTests: XCTestCase {
+    /// Words arriving from iCloud aren't in the device's dictionary yet. Reconciling against the
+    /// merged copy would read them as removed and delete them everywhere; DeviceSync reconciles
+    /// against the device's own record instead.
+    func testWordsFromAnotherDeviceSurviveApplying() {
+        let local = SyncVocabulary().reconciled(terms: ["Alpha"], snippets: [], now: 10)
+        let remote = SyncVocabulary().reconciled(terms: ["Beta"], snippets: [], now: 20)
+        let merged = SyncVocabulary.merge(local: local, remote: remote)
+
+        let current = local.reconciled(terms: ["Alpha"], snippets: [], now: 30)
+        let final = SyncVocabulary.merge(local: current, remote: merged)
+        XCTAssertEqual(final.dictionary(keepingOrderOf: ["Alpha"]), ["Alpha", "Beta"])
+
+        let wrong = merged.reconciled(terms: ["Alpha"], snippets: [], now: 30)
+        XCTAssertEqual(wrong.liveTerms.map(\.text), ["Alpha"], "the bug this guards against")
+    }
+}

@@ -150,11 +150,12 @@ final class DeviceSync: ObservableObject {
         let keys = self.keys
         let iCloud = usesICloud
         if iCloud { importLegacyICloudOnce() }
-        var ledger = localLedger()
-        if iCloud, let remote = CloudVocabulary.read(from: cloud) {
-            ledger = SyncVocabulary.merge(local: ledger, remote: remote)
-        }
-        let start = ledger
+        // `local` is what this device's words say. `start` adds what iCloud holds, and goes to the
+        // server. Applying has to reconcile against `local`: against `start`, words that just came
+        // from iCloud aren't in Settings yet and would look removed here, and be deleted everywhere.
+        let local = localLedger()
+        let fromICloud = iCloud ? CloudVocabulary.read(from: cloud) : nil
+        let start = fromICloud.map { SyncVocabulary.merge(local: local, remote: $0) } ?? local
         Task {
             defer {
                 running = false
@@ -173,7 +174,7 @@ final class DeviceSync: ObservableObject {
                 }
             }
             guard self.keys == keys, usesICloud == iCloud else { return }
-            apply(merged, startedFrom: start)
+            apply(merged, startedFrom: local)
             if let failure {
                 log.error("Sync failed: \(failure.localizedDescription, privacy: .public)")
                 status = .failed(failure.localizedDescription)
