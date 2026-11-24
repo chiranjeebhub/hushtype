@@ -194,7 +194,7 @@ footer a:hover{color:var(--fg)}
 
       <section id="sync">
         <h2>Sync</h2>
-        <p>Sync is off until you turn it on. It carries your dictionary and snippets between your devices. Your dictation history is never synced.</p>
+        <p>Sync carries your dictionary and snippets between your devices. Hushtype Sync is off until you pair a device; iCloud sync is described below. Your dictation history is never synced.</p>
         <h3>Hushtype Sync (Mac, iPhone and Android)</h3>
         <p>You pair devices by scanning a QR code or typing a pairing code. There are no accounts. Your devices derive the encryption key from a random secret in that code, and your dictionary and snippets are encrypted with AES-256-GCM before they leave the device. Our sync server, which runs on Cloudflare Workers, stores only:</p>
         <ul>
@@ -203,8 +203,8 @@ footer a:hover{color:var(--fg)}
           <li>the encrypted data, a version number and when it last changed.</li>
         </ul>
         <p>Nobody, including us, can read the encrypted data without your pairing code. The server doesn't log or keep IP addresses. Cloudflare carries the network traffic and handles it under <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's Privacy Policy</a>. If you stop syncing on every device, the last encrypted copy stays on the server until you ask us to remove it (see <a href="#changes">contact</a>).</p>
-        <h3>iCloud (between Macs)</h3>
-        <p>On Mac you can also turn on iCloud sync. Your dictionary, snippets and a few preferences are then stored in your iCloud account through Apple's iCloud key-value storage, and if you choose to sync your API key, it is stored in iCloud Keychain. This data is handled by Apple under <a href="https://www.apple.com/legal/privacy/">Apple's Privacy Policy</a>; we have no access to it.</p>
+        <h3>iCloud (Mac, iPhone and iPad)</h3>
+        <p>Hushtype can also sync through iCloud between Macs, iPhones and iPads on the same Apple ID. On Mac you turn it on in Settings. On iPhone and iPad it is on when you're signed in to iCloud, and you can turn it off in Hushtype's Settings › Sync. Your dictionary, snippets and, on Mac, a few preferences are then stored in your iCloud account through Apple's iCloud key-value storage, and if you choose to sync your API key on Mac, it is stored in iCloud Keychain. The iPhone app never puts your API key in iCloud. This data is handled by Apple under <a href="https://www.apple.com/legal/privacy/">Apple's Privacy Policy</a>; we have no access to it.</p>
       </section>
 
       <section id="updates">
