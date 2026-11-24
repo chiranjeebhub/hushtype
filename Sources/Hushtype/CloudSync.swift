@@ -2,9 +2,10 @@ import Combine
 import Foundation
 import HushtypeCore
 
-/// Mirrors the settings that follow a person, not a Mac, through iCloud key-value storage: the
-/// dictionary, snippets and style choices. The dictation key, microphone, login item and history
-/// stay on each Mac, and so does "keep history", since turning it off erases that Mac's history.
+/// Mirrors the style choices, which follow a person rather than a Mac, through iCloud key-value
+/// storage. DeviceSync carries the dictionary and snippets (through iCloud too, merged word by
+/// word with the iPhone). The dictation key, microphone, login item and history stay on each
+/// Mac, and so does "keep history", since turning it off erases that Mac's history.
 /// This Mac's copy stays the source of truth; iCloud carries changes between Macs.
 @MainActor
 final class CloudSync {
@@ -18,8 +19,6 @@ final class CloudSync {
     private var applyingRemote = false
 
     private enum Key {
-        static let dictionary = "dictionary"
-        static let snippets = "snippets"
         static let cleanupEnabled = "cleanupEnabled"
         static let useContext = "useContext"
         static let language = "language"
@@ -61,8 +60,6 @@ final class CloudSync {
         pull(merging: true)
         pushAll()
 
-        watch(settings.$dictionaryText) { [weak self] _ in self?.pushDictionary() }
-        watch(settings.$snippets) { [weak self] _ in self?.pushSnippets() }
         watch(settings.$cleanupEnabled) { [weak self] in self?.push($0, Key.cleanupEnabled) }
         watch(settings.$useContext) { [weak self] in self?.push($0, Key.useContext) }
         watch(settings.$language) { [weak self] in self?.push($0, Key.language) }
@@ -87,8 +84,6 @@ final class CloudSync {
     // MARK: Sending
 
     private func pushAll() {
-        pushDictionary()
-        pushSnippets()
         push(settings.cleanupEnabled, Key.cleanupEnabled)
         push(settings.useContext, Key.useContext)
         push(settings.language, Key.language)
@@ -100,43 +95,15 @@ final class CloudSync {
     private func push(_ value: Bool, _ key: String) { store.set(value, forKey: key) }
     private func push(_ value: String, _ key: String) { store.set(value, forKey: key) }
 
-    /// Hushtype device sync carries the dictionary and snippets when it's on. iCloud copies them
-    /// only by replacing the whole list, which would undo that sync's per-word merging.
-    private var deviceSyncOn: Bool { UserDefaults.standard.bool(forKey: DeviceSync.enabledKey) }
-
-    private func pushDictionary() {
-        guard !deviceSyncOn else { return }
-        store.set(settings.dictionaryText, forKey: Key.dictionary)
-    }
-
-    private func pushSnippets() {
-        guard !deviceSyncOn else { return }
-        if let data = try? JSONEncoder().encode(settings.snippets) { store.set(data, forKey: Key.snippets) }
-    }
-
     // MARK: Receiving
 
-    /// Applies what's in iCloud. When sync is first turned on, words and snippets are merged so
-    /// nothing on either side is lost; after that iCloud's copy replaces this Mac's, so a word
-    /// removed on one Mac is removed on the others too.
+    /// Applies the style choices in iCloud. The dictionary and snippets go through DeviceSync,
+    /// which merges them word by word with the iPhone and the sync server.
     private func pull(merging: Bool) {
         applyingRemote = true
         defer {
             // Let the change notifications from these assignments pass before echoing resumes.
             DispatchQueue.main.async { [weak self] in self?.applyingRemote = false }
-        }
-
-        if !deviceSyncOn, let remote = store.string(forKey: Key.dictionary) {
-            if merging {
-                settings.addToDictionary(DictationPipeline.vocabulary(from: remote))
-            } else if remote != settings.dictionaryText {
-                settings.dictionaryText = remote
-            }
-        }
-        if !deviceSyncOn, let data = store.data(forKey: Key.snippets),
-           let remote = try? JSONDecoder().decode([Snippet].self, from: data) {
-            let updated = merging ? SnippetSync.merge(settings.snippets, remote) : remote
-            if updated != settings.snippets { settings.snippets = updated }
         }
 
         // Simple choices take the latest value from iCloud.

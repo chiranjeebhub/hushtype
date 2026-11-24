@@ -3,9 +3,11 @@ import Combine
 import HushtypeCore
 import os
 
-/// Keeps the dictionary and snippets in step with the person's other devices (Macs, iPhone,
-/// Android) through the Hushtype sync server. Everything is encrypted on this Mac with a secret
-/// only the paired devices know; pairing hands that secret over as a QR code or a typed code.
+/// Keeps the dictionary and snippets in step with the person's other devices, two ways at once:
+/// - iCloud, when "Sync with iCloud" is on: Macs and iPhones on the same Apple ID, no pairing.
+/// - The Hushtype sync server, once paired: any device, Android too. Everything is encrypted on
+///   this Mac with a secret only the paired devices know; pairing hands it over as a QR code.
+/// Both hold the same per-word record (`SyncVocabulary`), so each round merges whatever both say.
 @MainActor
 final class DeviceSync: ObservableObject {
     enum Status: Equatable {
@@ -15,10 +17,9 @@ final class DeviceSync: ObservableObject {
         case failed(String)
     }
 
-    /// Read by iCloud sync, which leaves the dictionary and snippets alone while this is on.
-    static let enabledKey = "deviceSyncEnabled"
     private static let ledgerKey = "deviceSyncLedger"
     private static let lastSyncKey = "deviceSyncLast"
+    private static let legacyImportedKey = "deviceSyncImportedLegacyICloud"
     private static let keychainAccount = "device-sync-secret"
     private static let interval: Duration = .seconds(10 * 60)
 
@@ -27,10 +28,11 @@ final class DeviceSync: ObservableObject {
 
     private let settings: SettingsStore
     private let defaults = UserDefaults.standard
+    private let cloud = NSUbiquitousKeyValueStore.default
     private let log = Logger(subsystem: "app.hushtype.Hushtype", category: "sync")
     private var subscriptions: Set<AnyCancellable> = []
     private var timer: Task<Void, Never>?
-    private var wakeObserver: NSObjectProtocol?
+    private var observers: [NSObjectProtocol] = []
     private var running = false
     private var runAgain = false
     /// True while synced words are written into Settings, so that write doesn't start a sync.
@@ -41,8 +43,7 @@ final class DeviceSync: ObservableObject {
         if let secret = Keychain.read(account: Self.keychainAccount).flatMap({ Data(base64Encoded: $0) }) {
             keys = SyncKeys(secret: secret)
         }
-        if keys != nil, let last = defaults.object(forKey: Self.lastSyncKey) as? Date { status = .upToDate(last) }
-        defaults.set(keys != nil, forKey: Self.enabledKey)
+        if isOn, let last = defaults.object(forKey: Self.lastSyncKey) as? Date { status = .upToDate(last) }
 
         // Edits sync a couple of seconds after they settle.
         settings.$dictionaryText.map { _ in () }
@@ -52,18 +53,39 @@ final class DeviceSync: ObservableObject {
             .debounce(for: .seconds(2), scheduler: DispatchQueue.main)
             .sink { [weak self] in self?.syncNow() }
             .store(in: &subscriptions)
-        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.syncNow() }
-        }
+        settings.$iCloudSync
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                if !self.isOn { self.status = .off }
+                self.syncNow()
+            }
+            .store(in: &subscriptions)
+        observers = [
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.syncNow() }
+            },
+            NotificationCenter.default.addObserver(
+                forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification, object: cloud, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.syncNow() }
+            },
+        ]
+        cloud.synchronize()
         startTimer()
         syncNow()
     }
 
-    var isOn: Bool { keys != nil }
+    /// Paired through the sync server.
+    var isPaired: Bool { keys != nil }
+    /// Syncing words through iCloud.
+    var usesICloud: Bool { settings.iCloudSync }
+    var isOn: Bool { isPaired || usesICloud }
 
-    // MARK: Turning it on and off
+    // MARK: Pairing
 
     /// Starts a new group with this Mac's words. Other devices join by scanning its code.
     func turnOn() {
@@ -72,33 +94,35 @@ final class DeviceSync: ObservableObject {
         syncNow()
     }
 
-    /// Joins the group another device started. Throws, leaving sync off, when the code is wrong or
-    /// the server can't be reached.
+    /// Joins the group another device started. Throws, leaving pairing off, when the code is
+    /// wrong or the server can't be reached.
     func join(code: String) async throws {
         guard let joined = SyncKeys(pairingCode: code) else {
             throw PairingError.notACode
         }
         status = .syncing
-        let ledger = loadLedger().reconciled(terms: settings.vocabulary, snippets: settings.snippets)
+        let ledger = localLedger()
         do {
             let merged = try await SyncClient(keys: joined).sync(ledger, joining: true)
             save(joined)
             apply(merged, startedFrom: ledger)
             finished()
         } catch {
-            status = keys == nil ? .off : status
+            status = isOn ? .failed(error.localizedDescription) : .off
             throw error
         }
     }
 
-    /// Stops syncing on this Mac. Its words stay; the other devices keep syncing with each other.
+    /// Unpairs this Mac. Its words stay; the other devices keep syncing with each other, and
+    /// iCloud keeps syncing if it's on.
     func turnOff() {
         Keychain.delete(account: Self.keychainAccount)
-        defaults.removeObject(forKey: Self.ledgerKey)
-        defaults.removeObject(forKey: Self.lastSyncKey)
-        defaults.set(false, forKey: Self.enabledKey)
         keys = nil
-        status = .off
+        if !usesICloud {
+            defaults.removeObject(forKey: Self.ledgerKey)
+            defaults.removeObject(forKey: Self.lastSyncKey)
+            status = .off
+        }
     }
 
     enum PairingError: LocalizedError {
@@ -111,20 +135,27 @@ final class DeviceSync: ObservableObject {
     private func save(_ new: SyncKeys) {
         Keychain.write(new.secret.base64EncodedString(), account: Self.keychainAccount)
         keys = new
-        defaults.set(true, forKey: Self.enabledKey)
     }
 
     // MARK: Syncing
 
     func syncNow() {
-        guard let keys else { return }
+        guard isOn else { return }
         if running {
             runAgain = true
             return
         }
         running = true
         status = .syncing
-        let ledger = loadLedger().reconciled(terms: settings.vocabulary, snippets: settings.snippets)
+        let keys = self.keys
+        let iCloud = usesICloud
+        if iCloud { importLegacyICloudOnce() }
+        // `local` is what this device's words say. `start` adds what iCloud holds, and goes to the
+        // server. Applying has to reconcile against `local`: against `start`, words that just came
+        // from iCloud aren't in Settings yet and would look removed here, and be deleted everywhere.
+        let local = localLedger()
+        let fromICloud = iCloud ? CloudVocabulary.read(from: cloud) : nil
+        let start = fromICloud.map { SyncVocabulary.merge(local: local, remote: $0) } ?? local
         Task {
             defer {
                 running = false
@@ -133,25 +164,39 @@ final class DeviceSync: ObservableObject {
                     syncNow()
                 }
             }
-            do {
-                let merged = try await SyncClient(keys: keys).sync(ledger)
-                guard self.keys == keys else { return }
-                apply(merged, startedFrom: ledger)
+            var merged = start
+            var failure: Error?
+            if let keys {
+                do {
+                    merged = try await SyncClient(keys: keys).sync(start)
+                } catch {
+                    failure = error
+                }
+            }
+            guard self.keys == keys, usesICloud == iCloud else { return }
+            apply(merged, startedFrom: local)
+            if let failure {
+                log.error("Sync failed: \(failure.localizedDescription, privacy: .public)")
+                status = .failed(failure.localizedDescription)
+            } else {
                 finished()
-            } catch {
-                guard self.keys == keys else { return }
-                log.error("Sync failed: \(error.localizedDescription, privacy: .public)")
-                status = .failed(error.localizedDescription)
             }
         }
     }
 
+    /// This Mac's record, updated with edits made since the last round.
+    private func localLedger() -> SyncVocabulary {
+        loadLedger().reconciled(terms: settings.vocabulary, snippets: settings.snippets)
+    }
+
     /// Writes the merged words into Settings without losing edits made while the request was out:
-    /// those are folded in with newer timestamps and go up on the next round.
+    /// those are folded in with newer timestamps and go up on the next round. Then iCloud gets the
+    /// result.
     private func apply(_ merged: SyncVocabulary, startedFrom ledger: SyncVocabulary) {
         let current = ledger.reconciled(terms: settings.vocabulary, snippets: settings.snippets)
-        let final = SyncVocabulary.merge(local: current, remote: merged)
+        let final = SyncVocabulary.merge(local: current, remote: merged).compacted()
         saveLedger(final)
+        if usesICloud { CloudVocabulary.write(final, to: cloud) }
 
         let words = final.dictionary(keepingOrderOf: settings.vocabulary)
         let snippets = final.snippetList(keepingOrderOf: settings.snippets)
@@ -159,7 +204,21 @@ final class DeviceSync: ObservableObject {
         if words != settings.vocabulary { settings.dictionaryText = words.joined(separator: "\n") }
         if snippets != settings.snippets { settings.snippets = snippets }
         DispatchQueue.main.async { [weak self] in self?.applying = false }
-        if final != merged { runAgain = true }
+        if isPaired, final != merged { runAgain = true }
+    }
+
+    /// Hushtype 0.3.7 and earlier kept the whole dictionary as one iCloud value. Its words are
+    /// added here once, so nothing an older Mac synced is lost.
+    private func importLegacyICloudOnce() {
+        guard !defaults.bool(forKey: Self.legacyImportedKey) else { return }
+        defaults.set(true, forKey: Self.legacyImportedKey)
+        let legacy = CloudVocabulary.legacy(from: cloud)
+        applying = true
+        if !legacy.terms.isEmpty { settings.addToDictionary(legacy.terms) }
+        let known = Set(settings.snippets.map(\.id))
+        let missing = legacy.snippets.filter { !known.contains($0.id) }
+        if !missing.isEmpty { settings.snippets += missing }
+        DispatchQueue.main.async { [weak self] in self?.applying = false }
     }
 
     private func finished() {

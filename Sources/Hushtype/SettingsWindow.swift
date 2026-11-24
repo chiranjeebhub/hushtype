@@ -1370,9 +1370,7 @@ private struct GeneralPane: View {
             SectionLabel("iCloud")
             SettingsCard {
                 ToggleRow(title: "Sync with iCloud",
-                          subtitle: deviceSync.isOn
-                            ? "Your style settings follow you to your other Macs. Your dictionary and snippets sync with your devices above."
-                            : "Your dictionary, snippets and style settings follow you to your other Macs. The dictation key, microphone and history stay on this Mac.",
+                          subtitle: "Your dictionary, snippets and style settings follow you to your iPhone and other Macs on this Apple ID, with no pairing. The dictation key, microphone and history stay on this Mac.",
                           symbol: "icloud", isOn: $settings.iCloudSync)
                 SettingsRow(title: "Include Anthropic API key",
                             subtitle: keySyncError ?? "Kept in iCloud Keychain, end-to-end encrypted, so you only paste it once.",
